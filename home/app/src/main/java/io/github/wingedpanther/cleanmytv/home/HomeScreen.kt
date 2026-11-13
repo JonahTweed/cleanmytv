@@ -83,6 +83,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shape
@@ -739,7 +740,8 @@ private fun IconTile(app: TvApp, ui: Ui) {
             filter = if (plate != null) ColorFilter.tint(Color.White) else null; letterInk = Color.White
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(back), contentAlignment = Alignment.Center) {
+    // Only draw the tile background with opacity; keep the artwork, text and focus fully visible.
+    BoxWithConstraints(Modifier.fillMaxSize().drawBehind { drawRect(brush = back, alpha = ui.cfg.tileOpacity / 100f) }, contentAlignment = Alignment.Center) {
         val wide = ui.shape == "wide"
         if (g != null && g.picture && ui.cfg.iconStyle == "colour") {
             Image(g.art, app.label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

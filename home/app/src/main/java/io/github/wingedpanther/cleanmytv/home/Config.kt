@@ -46,6 +46,7 @@ data class HomeConfig(
     // Icons: "banner" is the app's own TV banner; the rest redraw every app's logo the same way
     val iconStyle: String = "banner", // banner, colour, mono, duo
     val tileShape: String = "wide", // wide, square, squircle, round; banner tiles are always wide
+    val tileOpacity: Int = 100, // percentage of existing icon-tile background opacity; logos remain opaque
     val intro: Boolean = true, // a new wallpaper comes in like a sunrise
     /** Which built-in theme picture the wallpaper is, as "<theme id>:<picture>", or "" for anything else. */
     val wallpaperFrom: String = "",
@@ -110,6 +111,7 @@ data class HomeConfig(
         .put("tilt", tilt)
         .put("icon_style", iconStyle)
         .put("tile_shape", tileShape)
+        .put("tile_opacity", tileOpacity)
         .put("intro", intro)
         .put("wallpaper_from", wallpaperFrom)
         .put("lock_on", lockOn)
@@ -220,6 +222,7 @@ data class HomeConfig(
                 tilt = bool("tilt", base.tilt),
                 iconStyle = choice("icon_style", base.iconStyle, setOf("banner", "colour", "mono", "duo")),
                 tileShape = choice("tile_shape", base.tileShape, setOf("wide", "square", "squircle", "round")),
+                tileOpacity = int("tile_opacity", base.tileOpacity, 0, 100),
                 intro = bool("intro", base.intro),
                 wallpaperFrom = if (o.has("wallpaper_from")) o.optString("wallpaper_from").takeIf { it.isEmpty() || THEME_PICTURE.matches(it) } ?: base.wallpaperFrom else base.wallpaperFrom,
                 lockOn = bool("lock_on", base.lockOn),

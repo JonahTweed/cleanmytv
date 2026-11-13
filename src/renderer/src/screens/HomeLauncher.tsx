@@ -992,6 +992,7 @@ function LookTab(props: { cfg: HomeConfig; set: SetFn; busy: boolean; wallpaper:
                 </button>
               ))}
             </div>
+            <Slider label="Tile background opacity" hint="Fade tile backgrounds without fading app logos or focus outlines. 100% keeps the original look." value={cfg.tile_opacity} min={0} max={100} step={5} unit="%" onChange={(v) => set({ tile_opacity: v }, 250)} />
           </>
         )}
       </div>

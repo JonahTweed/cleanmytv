@@ -20,7 +20,7 @@ export const DEFAULTS: HomeConfig = {
   rows: [], folders: [], dock_scale: 100, tile_scale: 100, buttons_on: false, buttons: [],
   accent: '#4CAF50', focus: 'lift', background: '#1C2A1F', wallpaper_dim: 35,
   order: [], hidden: [], dock_size: 5, columns: 6, show_names: true, name_focus: false, follow_colour: false, pin_focus: false, tilt: false,
-  icon_style: 'banner', tile_shape: 'wide', intro: true, wallpaper_from: '',
+  icon_style: 'banner', tile_shape: 'wide', tile_opacity: 100, intro: true, wallpaper_from: '',
   lock_on: false, lock_apps: [], lock_system: false, lock_for: 'sleep', lock_show: 'badge',
   fire_wall: false, fire_sound: true, fire_wall_sound: false, fire_volume: 40, fire_timer: 0,
   slide_minutes: 0, slide_from: 'mine', other_apps: false,
@@ -58,7 +58,7 @@ const GROUPS = { rows: 8, folders: 12 } as const
 const plain = (s: string, max: number): string => s.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max)
 
 const RANGES = {
-  top_space: [0, 40], dock_scale: [60, 150], tile_scale: [60, 150],
+  top_space: [0, 40], dock_scale: [60, 150], tile_scale: [60, 150], tile_opacity: [0, 100],
   wallpaper_dim: [0, 80], dock_size: [0, 8], columns: [3, 8], idle_minutes: [0, 60],
   viz_bars: [8, 64], viz_height: [4, 40], viz_opacity: [20, 100], viz_sensitivity: [25, 300],
   fire_volume: [0, 100], fire_timer: [0, 240], slide_minutes: [0, 240]

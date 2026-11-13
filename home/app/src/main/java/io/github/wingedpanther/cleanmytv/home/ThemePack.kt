@@ -91,6 +91,6 @@ object ThemePack {
     }
 
     private val LOOK_KEYS = listOf(
-        "accent", "background", "focus", "wallpaper_dim", "viz_style", "viz_colour", "viz_peaks", "icon_style", "tile_shape",
+        "accent", "background", "focus", "wallpaper_dim", "top_space", "viz_style", "viz_colour", "viz_peaks", "icon_style", "tile_shape", "tile_opacity",
     )
 }

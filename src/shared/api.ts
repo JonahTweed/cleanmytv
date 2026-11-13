@@ -238,6 +238,8 @@ export interface HomeConfig {
   icon_style: 'banner' | 'colour' | 'mono' | 'duo'
   /** Tile outline for the icon styles; banners stay wide. */
   tile_shape: 'wide' | 'square' | 'squircle' | 'round'
+  /** 0–100: scale only the icon tile background opacity; logo and focus remain visible. */
+  tile_opacity: number
   /** A new wallpaper comes in like a sunrise. */
   intro: boolean
   /** The built-in theme picture the wallpaper is, as "<theme id>:<picture>", or "" for any other. */
