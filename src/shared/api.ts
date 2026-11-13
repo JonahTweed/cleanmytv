@@ -244,6 +244,13 @@ export interface HomeConfig {
   intro: boolean
   /** The built-in theme picture the wallpaper is, as "<theme id>:<picture>", or "" for any other. */
   wallpaper_from: string
+  /** Automatic day/night theme switching, based on the TV's local time. */
+  auto_theme: boolean
+  day_theme: string
+  night_theme: string
+  /** Local 24-hour HH:mm. */
+  day_time: string
+  night_time: string
   // App lock (launcher 1.5.0). The PIN is set with setLockPin and never comes back.
   lock_on: boolean
   lock_apps: string[]
@@ -300,6 +307,8 @@ export interface HomeConfig {
   lock_pin_set?: boolean
   /** Read only: how many built-in themes are on the TV for its carousel. */
   themes_on_tv?: number
+  /** Read only: names and IDs of theme packs already installed on the TV. */
+  themes_available?: { id: string; name: string }[]
   /** Read only: the fireplace video is on the TV. */
   fire_on_tv?: boolean
   /** Read only: how many slideshow pictures are on the TV. */

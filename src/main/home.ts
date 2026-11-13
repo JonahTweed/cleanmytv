@@ -21,6 +21,7 @@ export const DEFAULTS: HomeConfig = {
   accent: '#4CAF50', focus: 'lift', background: '#1C2A1F', wallpaper_dim: 35,
   order: [], hidden: [], dock_size: 5, columns: 6, show_names: true, name_focus: false, follow_colour: false, pin_focus: false, tilt: false,
   icon_style: 'banner', tile_shape: 'wide', tile_opacity: 100, intro: true, wallpaper_from: '',
+  auto_theme: false, day_theme: '', night_theme: '', day_time: '07:00', night_time: '19:00',
   lock_on: false, lock_apps: [], lock_system: false, lock_for: 'sleep', lock_show: 'badge',
   fire_wall: false, fire_sound: true, fire_wall_sound: false, fire_volume: 40, fire_timer: 0,
   slide_minutes: 0, slide_from: 'mine', other_apps: false,
@@ -64,7 +65,7 @@ const RANGES = {
   fire_volume: [0, 100], fire_timer: [0, 240], slide_minutes: [0, 240]
 } as const
 
-const BOOLS = ['show_names', 'name_focus', 'follow_colour', 'pin_focus', 'tilt', 'intro', 'lock_on', 'lock_system', 'fire_wall', 'fire_sound', 'fire_wall_sound', 'other_apps', 'visualiser', 'viz_peaks', 'buttons_on'] as const
+const BOOLS = ['show_names', 'name_focus', 'follow_colour', 'pin_focus', 'tilt', 'intro', 'lock_on', 'lock_system', 'fire_wall', 'fire_sound', 'fire_wall_sound', 'other_apps', 'visualiser', 'viz_peaks', 'buttons_on', 'auto_theme'] as const
 const KEY_SERVICE = `${HOME_PKG}/${HOME_PKG}.KeyService`
 /** Lets the launcher see other apps' media sessions; on only while the Now playing section is. */
 const NOW_LISTENER = `${HOME_PKG}/${HOME_PKG}.NowPlayingListener`
@@ -192,6 +193,12 @@ export function parse(out: string): HomeConfig {
   if (typeof o.configured === 'boolean') cfg.configured = o.configured
   if (typeof o.lock_pin_set === 'boolean') cfg.lock_pin_set = o.lock_pin_set
   if (typeof o.themes_on_tv === 'number') cfg.themes_on_tv = o.themes_on_tv
+  if (Array.isArray(o.themes_available)) cfg.themes_available = o.themes_available.flatMap((t) => {
+    if (!t || typeof t !== 'object') return []
+    const item = t as Record<string, unknown>
+    if (typeof item.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(item.id) || typeof item.name !== 'string') return []
+    return [{ id: item.id, name: item.name.slice(0, 40) }]
+  })
   if (typeof o.can_change_settings === 'boolean') cfg.can_change_settings = o.can_change_settings
   // Older launchers don't report this; leave it unset so the editor doesn't mark everything unavailable.
   if (Array.isArray(o.quick_available)) cfg.quick_available = o.quick_available.filter((q): q is QuickId => (QUICK as readonly unknown[]).includes(q))
@@ -221,6 +228,16 @@ export function clean(o: Record<string, unknown>, lenient = false): Partial<Home
     if (o[k] === undefined) continue
     if (typeof o[k] === 'boolean') out[k] = o[k]
     else bad(`${k} must be true or false`)
+  }
+  for (const k of ['day_theme', 'night_theme'] as const) {
+    if (o[k] === undefined) continue
+    if (typeof o[k] === 'string' && (o[k] === '' || /^[a-z0-9-]{1,40}$/.test(o[k] as string))) out[k] = o[k]
+    else bad(`${k} must be the ID of a theme installed on the TV, or empty`)
+  }
+  for (const k of ['day_time', 'night_time'] as const) {
+    if (o[k] === undefined) continue
+    if (typeof o[k] === 'string' && /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(o[k] as string)) out[k] = o[k]
+    else bad(`${k} must be a local 24-hour time (HH:mm)`)
   }
   if (o.wallpaper_from !== undefined) {
     if (typeof o.wallpaper_from === 'string' && (o.wallpaper_from === '' || THEME_PICTURE.test(o.wallpaper_from))) out.wallpaper_from = o.wallpaper_from

@@ -923,12 +923,59 @@ function ThemesCard({ themes, busy }: { themes: ThemeActions; busy: boolean }): 
   )
 }
 
+/** Only the Mac exposes schedule controls; the TV applies them without requiring the Mac online. */
+function ThemeScheduleCard({ cfg, set }: { cfg: HomeConfig; set: SetFn }): ReactNode {
+  const installed = cfg.themes_available ?? []
+  const duplicateTimes = cfg.day_time === cfg.night_time
+  return (
+    <div className="card">
+      <h2>Automatic day & night themes</h2>
+      <p className="muted">Switch between themes already on the TV at set times. The Chromecast uses its own local time, even when this Mac is off.</p>
+      <Toggle
+        label="Switch themes automatically"
+        hint="Manual theme selections stay in place until the next scheduled change."
+        checked={cfg.auto_theme}
+        onChange={(v) => set({ auto_theme: v })}
+      />
+      {installed.length === 0 && <p className="small muted">No installed theme pack reported. Reconnect to refresh the list. Do not replace your custom TV themes without a backup.</p>}
+      {installed.length > 0 && (
+        <>
+          {([['day', 'Day', 'day_theme', 'day_time'], ['night', 'Night', 'night_theme', 'night_time']] as const).map(([key, name, themeKey, timeKey]) => (
+            <div key={key} className="row" style={{ marginTop: 12, alignItems: 'center', gap: 12 }}>
+              <label style={{ minWidth: 58 }}>{name}</label>
+              <select
+                aria-label={`${name} theme`}
+                value={cfg[themeKey]}
+                onChange={(e) => set({ [themeKey]: e.target.value })}
+                style={{ maxWidth: 240 }}
+              >
+                <option value="">Choose a theme…</option>
+                {installed.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <input
+                aria-label={`${name} change time`}
+                type="time"
+                value={cfg[timeKey]}
+                onChange={(e) => { if (/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(e.target.value)) set({ [timeKey]: e.target.value }) }}
+              />
+            </div>
+          ))}
+          {duplicateTimes && <p className="small muted">Pick different day and night times to activate the schedule.</p>}
+          {cfg.auto_theme && (!cfg.day_theme || !cfg.night_theme) && <p className="small muted">Select both themes to start switching.</p>}
+          <p className="small muted" style={{ marginBottom: 0 }}>The TV checks while Home is open and whenever it wakes. Changing a theme with the remote overrides it until the next scheduled time.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
 function LookTab(props: { cfg: HomeConfig; set: SetFn; busy: boolean; wallpaper: (label: string, get: () => Promise<string | null>) => Promise<void>; themes: ThemeActions }): ReactNode {
   const { cfg, set, busy, wallpaper, themes } = props
   const file = useRef<HTMLInputElement>(null)
   return (
     <>
       <ThemesCard themes={themes} busy={busy} />
+      <ThemeScheduleCard cfg={cfg} set={set} />
       <div className="card">
         <h2>Accent colour</h2>
         <p className="muted">For the focus glow or outline and the music bars.</p>

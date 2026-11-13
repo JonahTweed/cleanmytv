@@ -50,6 +50,12 @@ data class HomeConfig(
     val intro: Boolean = true, // a new wallpaper comes in like a sunrise
     /** Which built-in theme picture the wallpaper is, as "<theme id>:<picture>", or "" for anything else. */
     val wallpaperFrom: String = "",
+    // Local day/night schedule. IDs refer to theme packs already installed on the TV.
+    val autoTheme: Boolean = false,
+    val dayTheme: String = "",
+    val nightTheme: String = "",
+    val dayTime: String = "07:00",
+    val nightTime: String = "19:00",
     // App lock: the PIN itself lives in Lock, never in these settings
     val lockOn: Boolean = false,
     val lockApps: List<String> = emptyList(),
@@ -114,6 +120,11 @@ data class HomeConfig(
         .put("tile_opacity", tileOpacity)
         .put("intro", intro)
         .put("wallpaper_from", wallpaperFrom)
+        .put("auto_theme", autoTheme)
+        .put("day_theme", dayTheme)
+        .put("night_theme", nightTheme)
+        .put("day_time", dayTime)
+        .put("night_time", nightTime)
         .put("lock_on", lockOn)
         .put("lock_apps", JSONArray(lockApps))
         .put("lock_system", lockSystem)
@@ -150,6 +161,8 @@ data class HomeConfig(
         private fun hex(c: Long) = "#%06X".format(c and 0xFFFFFF)
         val QUICK = setOf("settings", "wifi", "inputs", "bluetooth", "display", "apps", "sleep", "search", "music", "panel", "themes", "fireplace")
         private val THEME_PICTURE = Regex("^[a-z0-9-]{1,40}:[0-9]$")
+        private val THEME_ID = Regex("^[a-z0-9-]{1,40}$")
+        private val LOCAL_TIME = Regex("^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
         private val SECTIONS = setOf("nowplaying", "dock", "rows", "folders", "grid")
         val BUTTON_ACTIONS = QUICK - "inputs" + setOf("inputs", "home", "back", "none", "app", "next_wallpaper")
         /** App shortcuts in the top bar, after the quick-settings icons that fit. */
@@ -225,6 +238,11 @@ data class HomeConfig(
                 tileOpacity = int("tile_opacity", base.tileOpacity, 0, 100),
                 intro = bool("intro", base.intro),
                 wallpaperFrom = if (o.has("wallpaper_from")) o.optString("wallpaper_from").takeIf { it.isEmpty() || THEME_PICTURE.matches(it) } ?: base.wallpaperFrom else base.wallpaperFrom,
+                autoTheme = bool("auto_theme", base.autoTheme),
+                dayTheme = if (o.has("day_theme")) o.optString("day_theme").takeIf { it.isEmpty() || THEME_ID.matches(it) } ?: base.dayTheme else base.dayTheme,
+                nightTheme = if (o.has("night_theme")) o.optString("night_theme").takeIf { it.isEmpty() || THEME_ID.matches(it) } ?: base.nightTheme else base.nightTheme,
+                dayTime = if (o.has("day_time")) o.optString("day_time").takeIf { LOCAL_TIME.matches(it) } ?: base.dayTime else base.dayTime,
+                nightTime = if (o.has("night_time")) o.optString("night_time").takeIf { LOCAL_TIME.matches(it) } ?: base.nightTime else base.nightTime,
                 lockOn = bool("lock_on", base.lockOn),
                 lockApps = pkgs("lock_apps") ?: base.lockApps,
                 lockSystem = bool("lock_system", base.lockSystem),

@@ -70,8 +70,16 @@ class ConfigProvider : ContentProvider() {
         }
         when (method) {
             "get" -> ConfigStore.load(ctx)
-            "set" -> ConfigStore.update(ctx, json(arg))
-            "set64" -> ConfigStore.update(ctx, json(String(Base64.decode(arg ?: "", Base64.DEFAULT), Charsets.UTF_8)))
+            "set" -> {
+                val patch = json(arg)
+                ConfigStore.update(ctx, patch)
+                if (patch.has("auto_theme")) ThemeSchedule.reset(ctx)
+            }
+            "set64" -> {
+                val patch = json(String(Base64.decode(arg ?: "", Base64.DEFAULT), Charsets.UTF_8))
+                ConfigStore.update(ctx, patch)
+                if (patch.has("auto_theme")) ThemeSchedule.reset(ctx)
+            }
             "wallpaper_begin" -> ConfigStore.wallpaperUpload(ctx).writeBytes(ByteArray(0))
             "wallpaper_chunk" -> {
                 val f = ConfigStore.wallpaperUpload(ctx)
@@ -180,6 +188,7 @@ class ConfigProvider : ContentProvider() {
             .put("quick_available", org.json.JSONArray(availableQuick(ctx)))
             .put("lock_pin_set", Lock.hasPin(ctx))
             .put("themes_on_tv", ThemePack.list(ctx).size)
+            .put("themes_available", org.json.JSONArray(ThemePack.list(ctx).map { t -> org.json.JSONObject().put("id", t.id).put("name", t.name) }))
             .put("fire_on_tv", Fire.ready(ctx))
             .put("slides_on_tv", Slides.count(ctx))
             .put("can_change_settings", TvSettings.canWriteSecure(ctx))

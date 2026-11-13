@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -28,6 +30,14 @@ data class TvApp(val pkg: String, val label: String, val art: ImageBitmap, val b
 
 class MainActivity : ComponentActivity() {
     private val visualiser = Visualiser()
+    private val themeHandler = Handler(Looper.getMainLooper())
+    private val themeTick = object : Runnable {
+        override fun run() {
+            runCatching { ThemeSchedule.check(this@MainActivity) }
+                .onFailure { Log.w(TAG, "automatic theme check failed", it) }
+            themeHandler.postDelayed(this, 30_000)
+        }
+    }
     /** Bumped when apps are installed or removed, or Home comes back into view, so the list reloads. */
     private val appsVersion = mutableIntStateOf(0)
     /** Something a remote button asked Home to open; HomeScreen clears it. */
@@ -69,6 +79,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         appsVersion.intValue++
+        // Apply the correct theme on wake, and keep checking while Home is on screen.
+        themeHandler.removeCallbacks(themeTick)
+        themeHandler.post(themeTick)
+    }
+
+    override fun onPause() {
+        themeHandler.removeCallbacks(themeTick)
+        super.onPause()
     }
 
     override fun onStop() {
