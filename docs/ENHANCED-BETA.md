@@ -68,7 +68,7 @@ Android normally blocks installing a lower version code. For rollback, prepare t
 
 The project declares Android 9+ and macOS 13+; Windows target is x64 Windows 10/11. These are build targets, not a tested device matrix. Existing Enhanced.1 was tested by the owner on a Chromecast; this new candidate has not yet been installed there. Android TV, Google TV and Fire TV settings, task commands, focus and debugging support differ. No universal compatibility claim is made.
 
-Apple notarisation and Windows code signing are not configured. The desktop application retains its existing application ID to preserve upgrade/configuration paths; avoid running upstream and Enhanced desktop companions simultaneously. The Android package remains io.github.wingedpanther.cleanmytv.home. The build uses the repository's existing compatibility key; it must match the installed certificate before device testing.
+Apple notarisation and Windows code signing are not configured. The desktop application retains its existing application ID and explicitly keeps its existing CleanMyTV configuration directory, including device keys, saved TVs and backups; avoid running upstream and Enhanced desktop companions simultaneously. The Android package remains io.github.wingedpanther.cleanmytv.home. The build uses the repository's existing compatibility key; it must match the installed certificate before device testing.
 
 ## Physical-device checklist before public beta
 

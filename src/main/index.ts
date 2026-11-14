@@ -227,6 +227,9 @@ function createWindow(): void {
 }
 
 // One copy at a time: two would race on the key file and on the same TV connection.
+// Product branding must not move the existing ADB key, saved devices or configuration backups.
+// Electron otherwise derives userData from the new productName.
+app.setPath('userData', join(app.getPath('appData'), 'CleanMyTV'))
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
 app.on('second-instance', () => {
