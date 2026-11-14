@@ -8,7 +8,7 @@ Desktop: 0.8.0-beta.2. Android launcher: 1.7.4-enhanced.3, version code 25. Andr
 
 A move now has a selected source container. It removes only that source shortcut and upserts the destination shortcut. Reordering in the same container changes only that container. Independent copies in other rows, folders and the Dock remain. Selecting an app from the editor's general chooser adds a destination shortcut without assuming which existing shortcut should be removed. Back cancels without persisting the pending move.
 
-A backward-compatible optional dock_apps list records explicit Dock membership after editing. Null/missing means the original implicit Dock rule, so merely upgrading does not rearrange existing installations. Explicit membership permits a Dock shortcut and folder shortcut for the same app. Desktop parsing, preview, ordering and Dock-size controls understand the list; portable themes exclude it. Hidden explicit Dock entries are preserved. Stale uninstalled entries cannot displace visible apps in legacy Dock calculations.
+A backward-compatible optional dock_apps list records explicit Dock membership after editing. Null/missing means the original implicit Dock rule, so merely upgrading does not rearrange existing installations. Explicit membership permits a Dock shortcut and folder shortcut for the same app. Desktop parsing, preview, ordering and Dock-size controls understand the list; portable themes exclude it. Hidden explicit Dock entries are preserved. Editing first captures the rendered legacy Dock, respecting Other-app and hidden-locked-app filtering. Stale uninstalled entries cannot displace visible apps in legacy Dock calculations.
 
 Folder/row deletion preserves Dock order and other groups; applications remain installed. Row rename and whole-row ordering use shared tested operations, including boundary and duplicate-name checks. Editor saves compare changed fields against the live settings and use the configuration revision to reject conflicting writes rather than overwrite newer edits.
 
@@ -56,7 +56,7 @@ The prior Repository-Comparison report remains historical review evidence; its D
 
 - Full Vitest suite: 188 tests passed in 16 files.
 - TypeScript checking and desktop production build: passed.
-- Full Android JVM suite: 26 passed (12 reliability, 9 Enhanced, 5 Inputs).
+- Full Android JVM suite: 27 passed (13 reliability, 9 Enhanced, 5 Inputs).
 - Signed release APK assembly: passed; package io.github.wingedpanther.cleanmytv.home, version 1.7.4-enhanced.3 / code 25.
 - apksigner verification: passed. Certificate SHA-256 cf511447bac0b9fb79767fc8f3499328e5082e0fb41ee764984adaa2c7cc0620 matches the unchanged repository compatibility key.
 
