@@ -36,6 +36,7 @@ data class HomeConfig(
     // Layout
     val order: List<String> = emptyList(), // apps first in this order, the rest alphabetically
     val hidden: Set<String> = emptySet(),
+    val dockApps: List<String>? = null, // null preserves legacy implicit Dock membership
     val dockSize: Int = 5, // the first visible apps in `order` sit in the dock
     val columns: Int = 6, // apps per row in the grid
     val showNames: Boolean = true,
@@ -111,6 +112,7 @@ data class HomeConfig(
         .put("wallpaper_dim", wallpaperDim)
         .put("order", JSONArray(order))
         .put("hidden", JSONArray(hidden.sorted()))
+        .put("dock_apps", dockApps?.let { JSONArray(it) } ?: JSONObject.NULL)
         .put("dock_size", dockSize)
         .put("columns", columns)
         .put("show_names", showNames)
@@ -231,6 +233,7 @@ data class HomeConfig(
                 wallpaperDim = int("wallpaper_dim", base.wallpaperDim, 0, 80),
                 order = pkgs("order") ?: base.order,
                 hidden = pkgs("hidden")?.toSet() ?: base.hidden,
+                dockApps = if (o.has("dock_apps")) if (o.isNull("dock_apps")) null else pkgs("dock_apps")?.take(8) ?: base.dockApps else base.dockApps,
                 dockSize = int("dock_size", base.dockSize, 0, 8),
                 columns = int("columns", base.columns, 3, 8),
                 showNames = bool("show_names", base.showNames),

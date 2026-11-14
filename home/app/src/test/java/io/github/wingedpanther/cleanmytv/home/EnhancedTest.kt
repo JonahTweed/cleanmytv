@@ -18,7 +18,7 @@ class EnhancedTest {
     @Test fun `moving a dock app to a folder preserves unrelated rows and can be cancelled without mutation`() {
         val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app", "org.c.app"), dockSize = 2,
             rows = listOf(Group("TV", listOf("org.c.app"))), folders = listOf(Group("Tools", emptyList())))
-        val next = HomeEdit.move(cfg, "org.a.app", 3, 0, cfg.order)
+        val next = HomeEdit.move(cfg, "org.a.app", 3, 0, cfg.order, 0)
         assertEquals(1, next.dockSize)
         assertEquals(listOf("org.b.app"), HomeEdit.apps(next, 0, cfg.order))
         assertEquals(listOf("org.a.app"), next.folders[0].apps)
@@ -37,8 +37,8 @@ class EnhancedTest {
     }
     @Test fun `moving within dock and row respects insertion position`() {
         val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app", "org.c.app"), dockSize = 2, rows = listOf(Group("TV", listOf("org.a.app", "org.c.app"))))
-        assertEquals(listOf("org.b.app", "org.a.app"), HomeEdit.move(cfg, "org.a.app", 0, 1, cfg.order).order.take(2))
-        assertEquals(listOf("org.c.app", "org.a.app"), HomeEdit.move(cfg, "org.a.app", 2, 1, cfg.order).rows[0].apps)
+        assertEquals(listOf("org.b.app", "org.a.app"), HomeEdit.move(cfg, "org.a.app", 0, 1, cfg.order, 0).dockApps)
+        assertEquals(listOf("org.c.app", "org.a.app"), HomeEdit.move(cfg, "org.a.app", 2, 1, cfg.order, 2).rows[0].apps)
     }
     @Test fun `deleting a folder releases apps to all apps without hiding or uninstalling`() {
         val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app"), dockSize = 0, folders = listOf(Group("Tools", listOf("org.a.app"))))

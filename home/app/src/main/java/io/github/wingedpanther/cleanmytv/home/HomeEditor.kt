@@ -36,30 +36,53 @@ object HomeEdit {
         container < 2 + c.rows.size -> c.rows[container - 2].apps
         else -> c.folders[container - 2 - c.rows.size].apps
     }
-    private fun dock(c: HomeConfig, all: List<String>) = (c.order + all).distinct().filter { it !in c.hidden && c.folders.none { g -> it in g.apps } }.take(c.dockSize)
-    fun move(c: HomeConfig, pkg: String, to: Int, at: Int, all: List<String>): HomeConfig {
-        require(to in containers(c).indices)
-        val oldDock = dock(c, all)
+    private fun dock(c: HomeConfig, all: List<String>) = c.dockApps ?: (c.order + all).distinct().filter { it in all && it !in c.hidden && c.folders.none { g -> it in g.apps } }.take(c.dockSize)
+    fun source(c: HomeConfig, section: String): Int? = when {
+        section == "dock" -> 0
+        section == "grid" -> 1
+        section.startsWith("row") -> section.removePrefix("row").toIntOrNull()?.takeIf { it in c.rows.indices }?.plus(2)
+        section.startsWith("folder:") -> c.folders.indexOfFirst { it.name == section.removePrefix("folder:") }.takeIf { it >= 0 }?.plus(2 + c.rows.size)
+        else -> null
+    }
+    /** Only the selected source placement moves; other shortcuts are independent. Null source adds a placement. */
+    fun move(c: HomeConfig, pkg: String, to: Int, at: Int, all: List<String>, from: Int? = null): HomeConfig {
+        require(to in containers(c).indices && (from == null || from in containers(c).indices))
         val target = apps(c, to, all).filter { it != pkg }.toMutableList()
         target.add(at.coerceIn(0, target.size), pkg)
-        val newDock = if (to == 0) target else oldDock.filter { it != pkg }
+        val oldDock = dock(c, all)
+        val newDock = if (to == 0) target else if (from == 0) oldDock - pkg else oldDock
         require(newDock.size <= 8) { "Dock holds up to eight apps" }
         require(to < 2 || target.size <= 60) { "A row or folder holds up to sixty apps" }
-        val rows = c.rows.mapIndexed { i, g -> g.copy(apps = if (to == i + 2) target else g.apps.filter { it != pkg }) }
-        val folders = c.folders.mapIndexed { i, g -> g.copy(apps = if (to == i + 2 + c.rows.size) target else g.apps.filter { it != pkg }) }
-        val rest = if (to == 1) target else (c.order + all).distinct().filter { it != pkg && it !in newDock }
-        return c.copy(order = (newDock + rest).distinct(), dockSize = newDock.size, rows = rows, folders = folders, hidden = c.hidden - pkg,
+        fun group(g: Group, container: Int) = g.copy(apps = when (container) { to -> target; from -> g.apps - pkg; else -> g.apps })
+        val rows = c.rows.mapIndexed { i, g -> group(g, i + 2) }
+        val folders = c.folders.mapIndexed { i, g -> group(g, i + 2 + c.rows.size) }
+        val order = if (to == 1) newDock + target + (c.order + all).filter { it !in newDock && it !in target } else newDock + (c.order + all).distinct().filter { it !in newDock }
+        return c.copy(order = order.distinct(), dockApps = newDock, dockSize = newDock.size, rows = rows, folders = folders, hidden = c.hidden - pkg,
             sections = (c.sections + when { to == 0 -> "dock"; to == 1 -> "grid"; to < 2 + c.rows.size -> "rows"; else -> "folders" }).distinct())
+    }
+    fun renameGroup(c: HomeConfig, folder: Boolean, index: Int, name: String): HomeConfig {
+        val groups = if (folder) c.folders else c.rows
+        require(index in groups.indices && name.isNotBlank() && name.length <= 30)
+        require(groups.withIndex().none { (i,g) -> i != index && g.name.equals(name, true) }) { "That name already exists" }
+        val next = groups.mapIndexed { i,g -> if (i == index) g.copy(name = name) else g }
+        return if (folder) c.copy(folders = next) else c.copy(rows = next)
+    }
+    fun reorderGroup(c: HomeConfig, folder: Boolean, index: Int, direction: Int): HomeConfig {
+        val groups = (if (folder) c.folders else c.rows).toMutableList()
+        require(index in groups.indices && direction in -1..1)
+        val target = (index + direction).coerceIn(0, groups.lastIndex)
+        java.util.Collections.swap(groups, index, target)
+        return if (folder) c.copy(folders = groups) else c.copy(rows = groups)
     }
     fun deleteGroup(c: HomeConfig, folder: Boolean, index: Int, all: List<String>): HomeConfig {
         val oldDock = dock(c, all)
         val next = if (folder) c.copy(folders = c.folders.filterIndexed { i, _ -> i != index }) else c.copy(rows = c.rows.filterIndexed { i, _ -> i != index })
-        return next.copy(order = oldDock + (c.order + all).distinct().filter { it !in oldDock })
+        return next.copy(dockApps = oldDock, order = oldDock + (c.order + all).distinct().filter { it !in oldDock })
     }
     fun remove(c: HomeConfig, pkg: String, source: String, all: List<String>): HomeConfig = when {
         source == "dock" -> {
             val remaining = dock(c, all).filter { it != pkg }
-            c.copy(order = remaining + (c.order + all).distinct().filter { it !in remaining }, dockSize = remaining.size)
+            c.copy(dockApps = remaining, order = remaining + (c.order + all).distinct().filter { it !in remaining }, dockSize = remaining.size)
         }
         source.startsWith("row") -> c.copy(rows = c.rows.mapIndexed { i, g -> if (source == "row$i") g.copy(apps = g.apps - pkg) else g })
         source.startsWith("folder:") -> c.copy(folders = c.folders.map { if (it.name == source.removePrefix("folder:")) it.copy(apps = it.apps - pkg) else it })
@@ -75,7 +98,7 @@ fun EditorSheet(title: String, onClose: () -> Unit, content: androidx.compose.fo
             Text(title, color = Color.White, fontSize = 24.sp)
             Text("D-pad to navigate • OK to confirm • Back to cancel", color = Color(0xFFD7CFC4), fontSize = 13.sp)
             LazyColumn(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { EditorButton("Return to Home", Modifier.focusRequester(first), onClose) }
+                item { EditorButton("Back / Cancel", Modifier.focusRequester(first), onClose) }
                 content()
             }
         }
@@ -98,7 +121,7 @@ private fun rename(ctx: Context, title: String, value: String, done: (String) ->
 }
 
 @Composable
-fun MoveAppEditor(app: TvApp, initialCfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
+fun MoveAppEditor(app: TvApp, initialCfg: HomeConfig, all: List<TvApp>, source: String? = null, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val cfg = remember { initialCfg }
     val revision = remember { ConfigStore.revision }
@@ -120,7 +143,7 @@ fun MoveAppEditor(app: TvApp, initialCfg: HomeConfig, all: List<TvApp>, onClose:
                     else -> false
                 }
             }) {
-                runCatching { ConfigStore.update(ctx, HomeEdit.move(cfg, app.pkg, destination, position, packages).toJson().put("_revision", revision)) }
+                runCatching { ConfigStore.update(ctx, HomeEdit.move(cfg, app.pkg, destination, position, packages, source?.let { HomeEdit.source(cfg, it) }).toJson().put("_revision", revision)) }
                     .onSuccess { onClose() }.onFailure { error = it.message ?: "Move failed" }
             }
         }
@@ -186,18 +209,23 @@ fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
         val next = c.toJson()
         val patch = JSONObject()
         for (key in next.keys()) if (next.get(key).toString() != previous.get(key).toString()) patch.put(key, next.get(key))
-        ConfigStore.update(ctx, patch)
+        val revision = ConfigStore.revision
+        val current = ConfigStore.config.value.toJson()
+        val changedElsewhere = patch.keys().asSequence().any { current.get(it).toString() != previous.get(it).toString() }
+        runCatching {
+            check(!changedElsewhere) { "Settings changed. Reopen this editor and try again." }
+            ConfigStore.update(ctx, patch.put("_revision", revision))
+        }.onFailure { android.widget.Toast.makeText(ctx, it.message ?: "Settings were not saved", android.widget.Toast.LENGTH_LONG).show() }
     }
     selectedGroup?.let { (folder, index) ->
         val groups = if (folder) cfg.folders else cfg.rows
         val g = groups.getOrNull(index)
         if (g == null) { selectedGroup = null; return }
-        fun save(gs: List<Group>) { set(if (folder) cfg.copy(folders = gs) else cfg.copy(rows = gs)) }
         EditorSheet(g.name, { selectedGroup = null }) {
             item { EditorButton("Add or rearrange apps") { choosingApp = true } }
-            item { EditorButton("Rename") { rename(ctx, "Rename", g.name) { name -> if (groups.withIndex().any { (i, old) -> i != index && old.name.equals(name, true) }) android.widget.Toast.makeText(ctx, "That name already exists", android.widget.Toast.LENGTH_LONG).show() else save(groups.mapIndexed { i, old -> if (i == index) old.copy(name = name) else old }) } } }
-            item { EditorButton("Move earlier") { if (index > 0) { val gs = groups.toMutableList(); java.util.Collections.swap(gs, index, index - 1); save(gs); selectedGroup = folder to index - 1 } } }
-            item { EditorButton("Move later") { if (index < groups.lastIndex) { val gs = groups.toMutableList(); java.util.Collections.swap(gs, index, index + 1); save(gs); selectedGroup = folder to index + 1 } } }
+            item { EditorButton("Rename") { rename(ctx, "Rename", g.name) { name -> if (groups.withIndex().any { (i, old) -> i != index && old.name.equals(name, true) }) android.widget.Toast.makeText(ctx, "That name already exists", android.widget.Toast.LENGTH_LONG).show() else set(HomeEdit.renameGroup(cfg, folder, index, name)) } } }
+            item { EditorButton("Move earlier") { if (index > 0) { set(HomeEdit.reorderGroup(cfg, folder, index, -1)); selectedGroup = folder to index - 1 } } }
+            item { EditorButton("Move later") { if (index < groups.lastIndex) { set(HomeEdit.reorderGroup(cfg, folder, index, 1)); selectedGroup = folder to index + 1 } } }
             item { EditorButton("Delete ${if (folder) "folder" else "row"} — keep all apps") {
                 AlertDialog.Builder(ctx).setTitle("Delete ${g.name}?").setMessage("Applications stay installed and remain available in All apps.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> set(HomeEdit.deleteGroup(cfg, folder, index, all.map { it.pkg })); selectedGroup = null }.show()
             } }

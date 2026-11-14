@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
@@ -154,7 +155,7 @@ private class Home(all: List<TvApp>, val cfg: HomeConfig) {
     private val inFolders = cfg.folders.flatMap { it.apps }.toSet()
     /** Phone apps with no TV banner, in their own folder when the owner asks (#3). Apps they placed stay put. */
     private val other = if (cfg.otherApps) shown.filter { !it.banner && it.pkg !in inFolders } else emptyList()
-    val dock = shown.filter { it.pkg !in inFolders && it !in other }.take(cfg.dockSize)
+    val dock = cfg.dockApps?.mapNotNull { p -> shown.firstOrNull { it.pkg == p } } ?: shown.filter { it.pkg !in inFolders && it !in other }.take(cfg.dockSize)
     val grid = shown.filter { it.pkg !in inFolders && it !in dock && it !in other }
     val rows = cfg.rows.map { g -> g.name to g.apps.mapNotNull { byPkg[it] }.filter { it.pkg !in cfg.hidden } }
     val folders = (cfg.folders.map { g -> g.name to g.apps.mapNotNull { byPkg[it] } } + listOf("Other apps" to other)).filter { it.second.isNotEmpty() }
@@ -258,10 +259,15 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
     var showEditor by remember { mutableStateOf(false) }
     var showOpenApps by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<Pair<String, TvApp>?>(null) }
-    var movingApp by remember { mutableStateOf<TvApp?>(null) }
+    var movingApp by remember { mutableStateOf<Pair<String, TvApp>?>(null) }
     var showThemes by remember { mutableStateOf(false) }
-    var panelPin by remember { mutableStateOf(false) }
-    val openPanel = { if (Lock.needsPin(ctx, Lock.PANEL)) panelPin = true else showPanel = true }
+    var pinTargets by remember { mutableStateOf<List<String>>(emptyList()) }
+    var afterPin by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun protect(entry: EditorAccess.Entry, app: String? = null, action: () -> Unit) {
+        val targets = EditorAccess.targets(cfg, Lock.hasPin(ctx), entry, app).filter { Lock.needsPin(ctx, it) }
+        if (targets.isEmpty()) action() else { pinTargets = targets; afterPin = action }
+    }
+    val openPanel = { protect(EditorAccess.Entry.PANEL) { showPanel = true } }
     LaunchedEffect(lastPress, cfg.idleMinutes, openFolder, showInputs, showPanel, showThemes, showEditor, selectedApp, movingApp, showOpenApps) {
         if (cfg.idleMinutes == 0 || openFolder != null || showInputs || showPanel || showThemes || showEditor || selectedApp != null || movingApp != null || showOpenApps) return@LaunchedEffect
         delay(cfg.idleMinutes * 60_000L)
@@ -272,6 +278,8 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
         when (open.value) {
             "inputs" -> showInputs = true
             "panel" -> openPanel()
+            "editor" -> protect(EditorAccess.Entry.EDITOR) { showEditor = true }
+            "open_apps" -> protect(EditorAccess.Entry.OPEN_APPS) { showOpenApps = true }
             "themes" -> showThemes = true
             "fireplace" -> runCatching { ctx.startActivity(android.content.Intent(ctx, FireplaceActivity::class.java)) }
         }
@@ -286,11 +294,40 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
         else resolve(ctx, a)?.let { i -> runCatching { ctx.startActivity(i) }.onFailure { Log.w(TAG, "${a.id}: $it") } }
     }
     val first = remember { FocusRequester() }
-    LaunchedEffect(home.first, cfg.layout) { if (home.first != null) runCatching { first.requestFocus() } }
+    val focusRegistry = remember { mutableMapOf<String, FocusRequester>() }
+    var lastFocus by remember { mutableStateOf<String?>(null) }
+    var initialFocus by remember(cfg.layout) { mutableStateOf(false) }
+    LaunchedEffect(home.first, cfg.layout) { if (!initialFocus && home.first != null) { initialFocus = runCatching { first.requestFocus() }.getOrDefault(false) } }
+    val overlay = showPanel || showEditor || showOpenApps || selectedApp != null || movingApp != null || pinTargets.isNotEmpty() || showThemes || showInputs
+    var wasOverlay by remember { mutableStateOf(false) }
+    var wasFolder by remember { mutableStateOf(false) }
+    LaunchedEffect(overlay, openFolder != null) {
+        val restore = !overlay && (wasOverlay || (wasFolder && openFolder == null))
+        wasOverlay = overlay
+        wasFolder = openFolder != null
+        if (restore) repeat(10) {
+            androidx.compose.runtime.withFrameNanos { }
+            val folderKey = lastFocus?.takeIf { it.startsWith("folder:") }?.substringBeforeLast(':')?.removePrefix("folder:")
+            val target = focusRegistry[lastFocus] ?: focusRegistry["folder-tile:$folderKey"] ?: first
+            if (runCatching { target.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
+        }
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                openFolder = null; showPanel = false; showEditor = false; showOpenApps = false
+                selectedApp = null; movingApp = null; pinTargets = emptyList(); afterPin = null
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     var focusColour by remember { mutableStateOf<Color?>(null) }
     val tint by animateColorAsState(focusColour ?: Color.Transparent, tween(600), label = "tint")
     val ui = Ui(cfg, accent, first, home.first, onFolder = { openFolder = it }, track = track, weather = weather,
-        onAppMenu = { section, app -> selectedApp = section to app }, onEdit = { showEditor = true },
+        onAppMenu = { section, app -> protect(EditorAccess.Entry.APP_MENU, app.pkg) { selectedApp = section to app } }, onEdit = { protect(EditorAccess.Entry.FOLDER) { showEditor = true } },
+        focusRegistry = focusRegistry, onFocusKey = { lastFocus = it },
         onFocusApp = { a -> focusColour = a.colour?.let { Color(it) } }, motion = motion)
 
     Box(
@@ -329,14 +366,20 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
 
     openFolder?.let { (name, list) -> FolderOverlay(name, list, ui) { openFolder = null } }
     if (showInputs) InputsOverlay(inputs, ui) { showInputs = false }
-    if (showPanel) SettingsPanel(accent, onEdit = { showPanel = false; showEditor = true }, onOpenApps = { showPanel = false; showOpenApps = true }) { showPanel = false }
+    if (showPanel) SettingsPanel(accent, onEdit = { protect(EditorAccess.Entry.EDITOR) { showPanel = false; showEditor = true } }, onOpenApps = { protect(EditorAccess.Entry.OPEN_APPS) { showPanel = false; showOpenApps = true } }) { showPanel = false }
     if (showEditor) HomeEditor(cfg, apps) { showEditor = false }
     if (showOpenApps) OpenAppsScreen { showOpenApps = false }
-    selectedApp?.let { (section, app) -> AppMenu(app, section, cfg, apps, onMove = { selectedApp = null; openFolder = null; movingApp = app }) { selectedApp = null } }
-    movingApp?.let { app -> MoveAppEditor(app, cfg, apps) { movingApp = null } }
+    selectedApp?.let { (section, app) -> AppMenu(app, section, cfg, apps, onMove = { protect(EditorAccess.Entry.APP_MENU, app.pkg) { selectedApp = null; openFolder = null; movingApp = section to app } }) { selectedApp = null } }
+    movingApp?.let { (source, app) -> MoveAppEditor(app, cfg, apps, source) { movingApp = null } }
     if (showThemes) ThemeCarousel(accent) { showThemes = false }
-    if (panelPin) Dialog(onDismissRequest = { panelPin = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        PinPad("Enter the PIN for Quick settings", Lock.PANEL, accent) { panelPin = false; showPanel = true }
+    if (pinTargets.isNotEmpty()) Dialog(onDismissRequest = { pinTargets = emptyList(); afterPin = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val target = pinTargets.first()
+        androidx.compose.runtime.key(target) {
+            PinPad("Enter the PIN to edit Home", target, accent) {
+                pinTargets = pinTargets.drop(1)
+                if (pinTargets.isEmpty()) { val action = afterPin; afterPin = null; action?.invoke() }
+            }
+        }
     }
 }
 
@@ -401,6 +444,8 @@ private class Ui(
     val motion: Boolean = true,
     val onAppMenu: (String, TvApp) -> Unit = { _, _ -> },
     val onEdit: () -> Unit = {},
+    val focusRegistry: MutableMap<String, FocusRequester> = mutableMapOf(),
+    val onFocusKey: (String) -> Unit = {},
 ) {
     /** Banners are always wide; the icon styles take the chosen shape. */
     val shape: String = if (cfg.iconStyle == "banner") "wide" else cfg.tileShape
@@ -510,7 +555,8 @@ private fun Sections(home: Home, ui: Ui, modifier: Modifier, padding: PaddingVal
         val top = if (paged) minOf(padding.calculateTopPadding(), (maxHeight - openingHeight - 16.dp).coerceAtLeast(0.dp)) else padding.calculateTopPadding()
         val inset = PaddingValues(start = padding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), end = padding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), top = top, bottom = padding.calculateBottomPadding())
         val viewport = maxHeight
-        LazyColumn(Modifier.fillMaxSize().fadeTop(), contentPadding = inset) {
+        val scrollState = rememberLazyListState()
+        LazyColumn(Modifier.fillMaxSize().fadeTop(), state = scrollState, contentPadding = inset) {
             if (paged) item("opening") {
                 Column(Modifier.height((viewport - top).coerceAtLeast(openingHeight))) {
                     Column(Modifier.onSizeChanged { openingHeight = with(density) { it.height.toDp() } }) {
@@ -572,8 +618,9 @@ private fun SectionTitle(text: String) {
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun TileRow(section: String, list: List<TvApp>, ui: Ui, w: Dp, big: Boolean) {
+    val scrollState = rememberLazyListState()
     val row = @Composable {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
+        LazyRow(state = scrollState, horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
             val tw = if (ui.shape == "wide") w else w * 0.72f
             items(list, key = { it.pkg }) { app -> Tile(section, app, ui, Modifier.width(tw), big) }
         }
@@ -677,6 +724,12 @@ private val PINNED = object : BringIntoViewSpec {
 @Composable
 private fun Tile(section: String, app: TvApp, ui: Ui, size: Modifier, big: Boolean) {
     val ctx = LocalContext.current
+    val focusKey = "$section:${app.pkg}"
+    val requester = remember(focusKey) { FocusRequester() }
+    DisposableEffect(focusKey) {
+        ui.focusRegistry[focusKey] = requester
+        onDispose { if (ui.focusRegistry[focusKey] === requester) ui.focusRegistry.remove(focusKey) }
+    }
     val shape = tileShape(ui.shape, big)
     val (scale, glow, border) = focusStyle(ui, shape, lifted = true)
     var focused by remember { mutableStateOf(false) }
@@ -690,8 +743,8 @@ private fun Tile(section: String, app: TvApp, ui: Ui, size: Modifier, big: Boole
         Surface(
             onClick = { launch(ctx, app) },
             onLongClick = { ui.onAppMenu(section, app) },
-            modifier = ui.focusFor(section, app).fillMaxWidth(if (!wide && inSlot) 0.72f else 1f).aspectRatio(if (wide) 16f / 9f else 1f)
-                .onFocusChanged { focused = it.isFocused; if (it.isFocused) ui.onFocusApp(app) }
+            modifier = ui.focusFor(section, app).focusRequester(requester).remoteSelect(focusKey, { launch(ctx, app) }, { ui.onAppMenu(section, app) }).fillMaxWidth(if (!wide && inSlot) 0.72f else 1f).aspectRatio(if (wide) 16f / 9f else 1f)
+                .onFocusChanged { focused = it.isFocused; if (it.isFocused) { ui.onFocusApp(app); ui.onFocusKey(focusKey) } }
                 .lift(ui, shape, focused),
             shape = ClickableSurfaceDefaults.shape(shape), scale = scale, glow = glow, border = border,
             colors = ClickableSurfaceDefaults.colors(containerColor = if (banner) TILE else Color.Transparent, focusedContainerColor = if (banner) TILE_FOCUSED else Color.Transparent)
@@ -816,16 +869,22 @@ private fun GeneratedTile(app: TvApp, big: Boolean, named: Boolean) {
 /** A folder: a 2x2 peek at its apps, the name underneath. OK opens it over the home screen. */
 @Composable
 private fun FolderTile(folder: Pair<String, List<TvApp>>, ui: Ui, size: Modifier) {
+    val key = "folder-tile:${folder.first}"
+    val requester = remember(key) { FocusRequester() }
+    DisposableEffect(key) {
+        ui.focusRegistry[key] = requester
+        onDispose { if (ui.focusRegistry[key] === requester) ui.focusRegistry.remove(key) }
+    }
     val shape = RoundedCornerShape(10.dp)
     val (scale, glow, border) = focusStyle(ui, shape, lifted = true)
     var focused by remember { mutableStateOf(false) }
     // The accent mixed into the background, a quarter and then two fifths, so folders read as the theme's own.
     val ground = Color(ui.cfg.background)
-    Column(size) {
+    Column(size.remoteSelect("folder-tile:${folder.first}", { ui.onFolder(folder) }, { ui.onEdit() })) {
         Surface(
             onClick = { ui.onFolder(folder) },
             onLongClick = { ui.onEdit() },
-            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { focused = it.isFocused }.lift(ui, shape, focused),
+            modifier = Modifier.focusRequester(requester).fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { focused = it.isFocused; if (it.isFocused) ui.onFocusKey(key) }.lift(ui, shape, focused),
             shape = ClickableSurfaceDefaults.shape(shape), scale = scale, glow = glow, border = border,
             colors = ClickableSurfaceDefaults.colors(containerColor = lerp(ground, ui.accent, 0.25f).copy(alpha = 0.9f), focusedContainerColor = lerp(ground, ui.accent, 0.4f))
         ) {
@@ -1004,7 +1063,7 @@ private fun FolderOverlay(name: String, list: List<TvApp>, ui: Ui, onClose: () -
         Box(Modifier.fillMaxSize().background(scrim(0.9f)), contentAlignment = Alignment.Center) {
             Column(Modifier.background(PANEL, RoundedCornerShape(16.dp)).padding(horizontal = 20.dp, vertical = 18.dp)) {
                 Text(name, color = TEXT, fontSize = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = BLEED, bottom = 6.dp))
-                val inner = Ui(ui.cfg, ui.accent, focus, list.firstOrNull()?.let { "folder:$name:${it.pkg}" }, ui.onFolder, motion = ui.motion, onAppMenu = ui.onAppMenu, onEdit = ui.onEdit)
+                val inner = Ui(ui.cfg, ui.accent, focus, list.firstOrNull()?.let { "folder:$name:${it.pkg}" }, ui.onFolder, motion = ui.motion, onAppMenu = ui.onAppMenu, onEdit = ui.onEdit, focusRegistry = ui.focusRegistry, onFocusKey = ui.onFocusKey)
                 list.chunked(5).forEach { row ->
                     Row(Modifier.padding(horizontal = BLEED, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp)) {
                         for (app in row) Tile("folder:$name", app, inner, Modifier.width(148.dp), big = false)

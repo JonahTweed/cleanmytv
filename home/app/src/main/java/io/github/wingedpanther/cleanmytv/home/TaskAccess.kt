@@ -100,6 +100,7 @@ object TaskAccess {
     fun close(pkg: String) = call(2, pkg)
     fun protected(ctx: Context, pkg: String): Boolean {
         if (pkg == ctx.packageName || pkg == "moe.shizuku.privileged.api") return true
+        if (Lock.needsPin(ctx, pkg)) return true
         val pm = ctx.packageManager
         val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return true
         if (info.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0) return true

@@ -223,6 +223,7 @@ export interface HomeConfig {
   order: string[]
   hidden: string[]
   /** The first visible apps in `order` that sit in the dock, 0 to 8. */
+  dock_apps?: string[] | null
   dock_size: number
   /** Apps per row in the grid, 3 to 8. */
   columns: number

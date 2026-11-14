@@ -65,7 +65,7 @@ function model(apps: TvApp[], cfg: HomeConfig) {
     (a) => !cfg.hidden.includes(a.pkg)
   )
   const inFolders = new Set(cfg.folders.flatMap((f) => f.apps))
-  const dock = ordered.filter((a) => !inFolders.has(a.pkg)).slice(0, cfg.dock_size)
+  const dock = cfg.dock_apps ? cfg.dock_apps.flatMap(p => ordered.find(a => a.pkg === p) ?? []) : ordered.filter((a) => !inFolders.has(a.pkg)).slice(0, cfg.dock_size)
   const grid = ordered.filter((a) => !inFolders.has(a.pkg) && !dock.includes(a))
   const rows = cfg.rows.map((r) => ({ name: r.name, apps: r.apps.flatMap((p) => (by.has(p) ? [by.get(p)!] : [])) })).filter((r) => r.apps.length)
   const folders = cfg.folders.map((f) => ({ name: f.name, apps: f.apps.flatMap((p) => (by.has(p) ? [by.get(p)!] : [])) })).filter((f) => f.apps.length)
