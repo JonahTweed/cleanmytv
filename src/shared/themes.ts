@@ -4,7 +4,7 @@ import type { HomeConfig, HomeTheme } from './api'
 
 /** The settings a theme carries. */
 export const THEME_KEYS = [
-  'accent', 'focus', 'background', 'wallpaper_dim', 'top_space', 'dock_scale', 'tile_scale', 'show_names', 'clock',
+  'accent', 'focus', 'background', 'wallpaper_dim', 'top_space', 'dock_scale', 'tile_scale', 'tile_gap', 'show_names', 'clock',
   'visualiser', 'viz_style', 'viz_bars', 'viz_height', 'viz_opacity', 'viz_colour', 'viz_peaks', 'viz_sensitivity',
   'icon_style', 'tile_shape', 'tile_opacity'
 ] as const satisfies readonly (keyof HomeConfig)[]

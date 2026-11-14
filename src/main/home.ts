@@ -17,7 +17,7 @@ const HEX = /^#[0-9A-Fa-f]{6}$/
 
 export const DEFAULTS: HomeConfig = {
   layout: 'shelf', sections: ['nowplaying', 'dock', 'rows', 'folders', 'grid'], top_space: 25, quick: ['inputs', 'wifi', 'settings'],
-  rows: [], folders: [], dock_scale: 100, tile_scale: 100, buttons_on: false, buttons: [],
+  rows: [], folders: [], dock_scale: 100, tile_scale: 100, tile_gap: 16, buttons_on: false, buttons: [],
   accent: '#4CAF50', focus: 'lift', background: '#1C2A1F', wallpaper_dim: 35,
   order: [], hidden: [], dock_size: 5, columns: 6, show_names: true, name_focus: false, follow_colour: false, pin_focus: false, tilt: false,
   icon_style: 'banner', tile_shape: 'wide', tile_opacity: 100, intro: true, wallpaper_from: '',
@@ -59,7 +59,7 @@ const GROUPS = { rows: 8, folders: 12 } as const
 const plain = (s: string, max: number): string => s.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max)
 
 const RANGES = {
-  top_space: [0, 40], dock_scale: [60, 150], tile_scale: [60, 150], tile_opacity: [0, 100],
+  top_space: [0, 40], tile_gap: [4, 40], dock_scale: [60, 150], tile_scale: [60, 150], tile_opacity: [0, 100],
   wallpaper_dim: [0, 80], dock_size: [0, 8], columns: [3, 8], idle_minutes: [0, 60],
   viz_bars: [8, 64], viz_height: [4, 40], viz_opacity: [20, 100], viz_sensitivity: [25, 300],
   fire_volume: [0, 100], fire_timer: [0, 240], slide_minutes: [0, 240]
@@ -189,6 +189,8 @@ export function parse(out: string): HomeConfig {
   if (!m) throw new Error(`CleanMyTV Home didn't answer: ${out.trim().slice(0, 300) || 'no output'}`)
   const o = JSON.parse(m[1]) as Record<string, unknown>
   const cfg: HomeConfig = { ...DEFAULTS, ...clean(o, true) }
+  cfg.pack_merge = o.pack_merge === true
+  if (Number.isSafeInteger(o._revision)) cfg._revision = o._revision as number
   cfg.has_wallpaper = o.has_wallpaper === true
   if (typeof o.configured === 'boolean') cfg.configured = o.configured
   if (typeof o.lock_pin_set === 'boolean') cfg.lock_pin_set = o.lock_pin_set
@@ -197,7 +199,7 @@ export function parse(out: string): HomeConfig {
     if (!t || typeof t !== 'object') return []
     const item = t as Record<string, unknown>
     if (typeof item.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(item.id) || typeof item.name !== 'string') return []
-    return [{ id: item.id, name: item.name.slice(0, 40) }]
+    return [{ id: item.id, name: item.name.slice(0, 40), opacity_default: typeof item.opacity_default === 'number' ? item.opacity_default : 100 }]
   })
   if (typeof o.can_change_settings === 'boolean') cfg.can_change_settings = o.can_change_settings
   // Older launchers don't report this; leave it unset so the editor doesn't mark everything unavailable.
@@ -208,6 +210,12 @@ export function parse(out: string): HomeConfig {
 /** Keeps only valid keys and values. `lenient` drops bad values; otherwise they throw. */
 export function clean(o: Record<string, unknown>, lenient = false): Partial<HomeConfig> {
   const out: Record<string, unknown> = {}
+  if (o.theme_opacity !== undefined) {
+    const m = o.theme_opacity
+    if (m && typeof m === 'object' && !Array.isArray(m) && Object.keys(m).length <= 500 && Object.entries(m).every(([id, v]) => /^[a-z0-9-]{1,40}$/.test(id) && Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 100)) out.theme_opacity = { ...m }
+    else if (!lenient) throw new Error('theme_opacity must contain theme IDs and percentages from 0 to 100')
+  }
+  if (o._revision !== undefined && Number.isSafeInteger(o._revision) && (o._revision as number) >= 0) out._revision = o._revision
   const bad = (msg: string): void => { if (!lenient) throw new Error(msg) }
   for (const k of ['accent', 'background'] as const) {
     if (o[k] === undefined) continue
@@ -464,21 +472,28 @@ export async function fireplace(action: 'put' | 'show' | 'saver' | 'remove'): Pr
 
 const THEME_ID = /^[a-z0-9-]{1,40}$/
 
+export async function saveCurrentThemeToTv(id: string, name: string): Promise<HomeConfig> {
+  if (!THEME_ID.test(id) || !plain(name, 40)) throw new Error('Choose a theme name.')
+  if (!(await readConfig()).pack_merge) throw new Error('Update the launcher first to save themes safely.')
+  return parse(await call('pack_save_current', Buffer.from(JSON.stringify({ id, name: plain(name, 40) })).toString('base64')))
+}
+
 export async function themePackBegin(): Promise<void> {
   log('theme', 'cmd', 'put the themes on the TV')
-  await call('pack_begin')
+  if (!(await readConfig()).pack_merge) throw new Error('Update the launcher first: this TV does not support safe theme merging.')
+  parse(await call('pack_begin'))
 }
 
 export async function themePackPut(item: ThemePackItem): Promise<void> {
   if (!item || !THEME_ID.test(item.id) || !Number.isInteger(item.picture) || item.picture < 0 || item.picture > 3) throw new Error('bad theme picture')
   if (item.picture === 0) {
     const meta = { id: item.id, name: plain(String(item.name ?? ''), 40), look: clean((item.look ?? {}) as Record<string, unknown>, true) }
-    await call('pack_meta', Buffer.from(JSON.stringify(meta)).toString('base64'))
+    parse(await call('pack_meta', Buffer.from(JSON.stringify(meta)).toString('base64')))
   }
   const data = jpeg(item.jpeg)
-  await call('pack_file_begin', Buffer.from(`${item.id}:${item.picture}`).toString('base64'))
-  for (const piece of pieces(data)) await call('pack_file_chunk', piece)
-  await call('pack_file_end', createHash('md5').update(data).digest('hex'))
+  parse(await call('pack_file_begin', Buffer.from(`${item.id}:${item.picture}`).toString('base64')))
+  for (const piece of pieces(data)) parse(await call('pack_file_chunk', piece))
+  parse(await call('pack_file_end', createHash('md5').update(data).digest('hex')))
 }
 
 /** Replaces the slideshow's pictures on the TV (#56). Each is a prepared JPEG in base64; an empty list clears them. */
@@ -559,7 +574,7 @@ function keep(cfg: HomeConfig): HomeConfig {
   if (base && cfg.configured !== false) {
     try {
       mkdirSync(paths.homeBackups, { recursive: true, mode: 0o700 })
-      const { has_wallpaper: _w, quick_available: _q, configured: _c, ...settings } = cfg
+      const { has_wallpaper: _w, quick_available: _q, configured: _c, _revision: _r, pack_merge: _m, ...settings } = cfg
       writeFileSync(base + '.json', JSON.stringify(settings, null, 2), { mode: 0o600 })
     } catch (e) {
       log('theme', 'info', `could not save the settings copy: ${(e as Error).message}`)

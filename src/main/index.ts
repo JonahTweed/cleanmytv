@@ -150,6 +150,7 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
   setLockPin: (pin) => home.setLockPin(String(pin ?? '')),
   setAppLock: (on) => home.setAppLock(on === true),
   clearAppLock: () => home.clearAppLock(),
+  saveCurrentThemeToTv: (id, name) => home.saveCurrentThemeToTv(id, name),
   themePackBegin: () => home.themePackBegin(),
   themePackPut: (item) => home.themePackPut(item),
   themePackEnd: (order) => home.themePackEnd(order),

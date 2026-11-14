@@ -114,6 +114,7 @@ export function Busy({ text }: { text: string }): ReactNode {
 export function Slider(props: {
   label: string
   hint?: string
+  disabled?: boolean
   value: number
   min: number
   max: number
@@ -128,6 +129,7 @@ export function Slider(props: {
       <div className="slider-field">
         <input
           type="range"
+          disabled={props.disabled}
           min={props.min}
           max={props.max}
           step={props.step ?? 1}

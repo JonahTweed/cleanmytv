@@ -324,6 +324,7 @@ export function installMock(): void {
       homeConfig.lock_pin_set = false
       return { ...homeConfig }
     },
+    async saveCurrentThemeToTv() { return { ...homeConfig } },
     async themePackBegin() { await wait(200) },
     async themePackPut() { await wait(60) },
     async setSlides(jpegs) {

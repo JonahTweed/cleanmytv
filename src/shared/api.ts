@@ -205,6 +205,7 @@ export interface HomeConfig {
   dock_scale: number
   /** Row and folder tiles, percent, 60 to 150. */
   tile_scale: number
+  tile_gap?: number
   /** The remote-button service is on (it only touches buttons in `buttons`). */
   buttons_on: boolean
   buttons: HomeButton[]
@@ -308,7 +309,10 @@ export interface HomeConfig {
   /** Read only: how many built-in themes are on the TV for its carousel. */
   themes_on_tv?: number
   /** Read only: names and IDs of theme packs already installed on the TV. */
-  themes_available?: { id: string; name: string }[]
+  themes_available?: { id: string; name: string; opacity_default?: number }[]
+  theme_opacity?: Record<string, number>
+  _revision?: number
+  pack_merge?: boolean
   /** Read only: the fireplace video is on the TV. */
   fire_on_tv?: boolean
   /** Read only: how many slideshow pictures are on the TV. */
@@ -489,6 +493,7 @@ export interface CytvApi {
   /** Forgets the PIN and turns the lock off. */
   clearAppLock(): Promise<HomeConfig>
   /** Replaces the themes on the TV: begin, one call per picture, then end with the order. */
+  saveCurrentThemeToTv(id: string, name: string): Promise<HomeConfig>
   themePackBegin(): Promise<void>
   themePackPut(item: ThemePackItem): Promise<void>
   themePackEnd(order: string[]): Promise<HomeConfig>

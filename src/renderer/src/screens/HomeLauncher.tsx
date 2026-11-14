@@ -48,6 +48,7 @@ export function HomeLauncher({ markDone, refreshTvs, status, homeSeen, openTab }
   const [themeBackup, setThemeBackup] = useState<ThemeBackup | null>(null)
   /** A theme waiting for the owner to accept that their wallpaper can't be saved first. */
   const [riskyTheme, setRiskyTheme] = useState<(() => void) | null>(null)
+  const revision = useRef<number | undefined>(undefined)
   const pending = useRef<Partial<HomeConfig>>({})
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -61,6 +62,7 @@ export function HomeLauncher({ markDone, refreshTvs, status, homeSeen, openTab }
       if (h.installed && !outdated(h)) {
         // The launcher's own list: the apps it shows, with the names the TV uses.
         const [c, a] = await Promise.all([window.cytv.readHomeConfig(), window.cytv.homeApps()])
+        revision.current = c._revision
         setCfg(c)
         setApps(a)
       }
@@ -72,7 +74,13 @@ export function HomeLauncher({ markDone, refreshTvs, status, homeSeen, openTab }
     load()
   }, [])
 
-  async function flush(): Promise<void> {
+  const writes = useRef<Promise<void>>(Promise.resolve())
+  function flush(): Promise<void> {
+    const next = writes.current.then(flushNow)
+    writes.current = next.catch(() => {})
+    return next
+  }
+  async function flushNow(): Promise<void> {
     const change = { ...pending.current }
     pending.current = {}
     if (!Object.keys(change).length) return
@@ -80,11 +88,13 @@ export function HomeLauncher({ markDone, refreshTvs, status, homeSeen, openTab }
     for (const k of ['rows', 'folders'] as const) if (change[k]) change[k] = change[k].filter((g) => g.name.trim())
     setSaving(true)
     try {
-      const back = await window.cytv.setHomeConfig(change)
-      setCfg((prev) => (prev ? { ...back, rows: prev.rows, folders: prev.folders, order: prev.order, greeting: prev.greeting } : back))
+      const back = await window.cytv.setHomeConfig({ ...change, _revision: revision.current })
+      revision.current = back._revision
+      setCfg({ ...back, ...pending.current })
       markDone('home')
     } catch (e) {
       setResult({ ok: false, summary: errorText(e), warnings: [] })
+      await load()
     } finally {
       setSaving(false)
     }
@@ -186,7 +196,38 @@ export function HomeLauncher({ markDone, refreshTvs, status, homeSeen, openTab }
     else go()
   }
 
+  useEffect(() => { if (cfg?._revision !== undefined) revision.current = cfg._revision }, [cfg?._revision])
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      if (busy || saving || Object.keys(pending.current).length) return
+      try {
+        const fresh = await window.cytv.readHomeConfig()
+        if (!Object.keys(pending.current).length && (fresh._revision ?? 0) >= (revision.current ?? 0)) { revision.current = fresh._revision; setCfg(fresh) }
+      } catch { /* Connection errors are shown by the next explicit operation. */ }
+    }, 5000)
+    return () => clearInterval(poll)
+  }, [busy, saving])
+
   const themes: ThemeActions = {
+    upload: async (name, updateId, text) => {
+      await flush()
+      setBusy('Saving theme to TV')
+      try {
+        const fresh = await window.cytv.readHomeConfig()
+        if ((fresh.themes_available ?? []).some(t => t.id !== updateId && t.name.toLocaleLowerCase() === name.trim().toLocaleLowerCase())) throw new Error('A theme with that name already exists. Select it in the update list.')
+        const id = updateId || `custom-${crypto.randomUUID().slice(0, 8)}`
+        if (text !== undefined) {
+          const t = parseTheme(text)
+          if (!t.wallpaper) throw new Error('This theme has no wallpaper. Load it, choose a wallpaper, then save the current look.')
+          await window.cytv.themePackBegin()
+          await window.cytv.themePackPut({ id, name: name.trim() || t.name, look: t.look, picture: 0, jpeg: t.wallpaper })
+          setCfg(await window.cytv.themePackEnd([id]))
+        } else setCfg(await window.cytv.saveCurrentThemeToTv(id, name))
+        setResult({ ok: true, summary: 'Theme saved to the TV. Other installed themes and pictures were preserved.', warnings: [] })
+      } catch (e) { setResult({ ok: false, summary: errorText(e), warnings: [] }) }
+      finally { setBusy(null) }
+    },
+    installed: cfg?.themes_available ?? [],
     used: themeUsed,
     builtIn: (id, picture = 0) => {
       const t = BUILT_IN_THEMES.find((b) => b.id === id)
@@ -718,6 +759,7 @@ function LayoutTab({ apps, cfg, set }: { apps: TvApp[]; cfg: HomeConfig; set: Se
 
       <div className="card">
         <h2>Sizes</h2>
+        <Slider label="Tile spacing" value={cfg.tile_gap ?? 16} min={4} max={40} step={2} unit=" dp" onChange={(v) => set({ tile_gap: v }, 250)} />
         <Slider label="Dock tiles" value={cfg.dock_scale} min={60} max={150} step={5} unit="%" onChange={(v) => set({ dock_scale: v }, 250)} />
         <Slider label="Row and folder tiles" value={cfg.tile_scale} min={60} max={150} step={5} unit="%" onChange={(v) => set({ tile_scale: v }, 250)} />
         <Slider label="Apps per row in All apps" value={cfg.columns} min={3} max={8} onChange={(v) => set({ columns: v }, 250)} />
@@ -813,6 +855,8 @@ const FOCUS_SWATCH: Record<HomeConfig['focus'], (accent: string) => string> = {
 }
 
 interface ThemeActions {
+  upload: (name: string, updateId?: string, text?: string) => Promise<void>
+  installed: NonNullable<HomeConfig['themes_available']>
   used: string | null
   builtIn: (id: string, picture?: number) => void
   /** The theme picture on the TV now ("<id>:<n>"), or "". */
@@ -852,6 +896,8 @@ function ThemeGrid({ themes, actions, busy }: { themes: BuiltInTheme[]; actions:
 function ThemesCard({ themes, busy }: { themes: ThemeActions; busy: boolean }): ReactNode {
   const file = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('My theme')
+  const [updateId, setUpdateId] = useState('')
+  const uploadFile = useRef<HTMLInputElement>(null)
   const [editing, setEditing] = useState(false)
   return (
     <div className="card">
@@ -909,6 +955,13 @@ function ThemesCard({ themes, busy }: { themes: ThemeActions; busy: boolean }): 
       />
       <div className="row" style={{ marginTop: 16 }}>
         <input type="text" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} aria-label="Theme name" style={{ width: 180 }} />
+        <select aria-label="Save as new or update installed theme" value={updateId} onChange={e => { setUpdateId(e.target.value); const t = themes.installed.find(t => t.id === e.target.value); if (t) setName(t.name) }}>
+          <option value="">Add a new theme</option>
+          {themes.installed.map(t => <option key={t.id} value={t.id}>Update / rename: {t.name}</option>)}
+        </select>
+        <button className="btn" disabled={busy || !name.trim()} onClick={() => themes.upload(name, updateId)}>Save Current Theme to TV</button>
+        <button className="btn ghost" disabled={busy} onClick={() => uploadFile.current?.click()}>Upload theme file to TV…</button>
+        <input hidden ref={uploadFile} type="file" accept={`.${THEME_EXT}`} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) f.text().then(text => themes.upload(name, updateId, text)) }} />
         <button className="btn" disabled={busy || !name.trim()} onClick={() => themes.save(name)}>
           Save this look…
         </button>
@@ -923,14 +976,14 @@ function ThemesCard({ themes, busy }: { themes: ThemeActions; busy: boolean }): 
   )
 }
 
-/** Only the Mac exposes schedule controls; the TV applies them without requiring the Mac online. */
+/** The desktop exposes schedule controls; the device applies them independently. */
 function ThemeScheduleCard({ cfg, set }: { cfg: HomeConfig; set: SetFn }): ReactNode {
   const installed = cfg.themes_available ?? []
   const duplicateTimes = cfg.day_time === cfg.night_time
   return (
     <div className="card">
       <h2>Automatic day & night themes</h2>
-      <p className="muted">Switch between themes already on the TV at set times. The Chromecast uses its own local time, even when this Mac is off.</p>
+      <p className="muted">Switch between themes already on the TV at set times. Your TV or streaming device uses its own local time, even when your computer is off.</p>
       <Toggle
         label="Switch themes automatically"
         hint="Manual theme selections stay in place until the next scheduled change."
@@ -975,6 +1028,14 @@ function LookTab(props: { cfg: HomeConfig; set: SetFn; busy: boolean; wallpaper:
   return (
     <>
       <ThemesCard themes={themes} busy={busy} />
+      <div className="card">
+        <h2>Tile background opacity by theme</h2>
+        <p className="muted">Logos, names and focus effects stay visible. Reset restores the theme’s original opacity.</p>
+        {(cfg.themes_available ?? []).map(t => <div key={t.id} className="row">
+          <Slider label={t.name} value={cfg.theme_opacity?.[t.id] ?? t.opacity_default ?? 100} min={0} max={100} unit="%" disabled={busy} onChange={v => set({ theme_opacity: { ...cfg.theme_opacity, [t.id]: v } }, 250)} />
+          <button className="btn small ghost" disabled={busy} onClick={() => { const m = { ...cfg.theme_opacity }; delete m[t.id]; set({ theme_opacity: m }) }} aria-label={`Reset ${t.name} opacity`}>Reset</button>
+        </div>)}
+      </div>
       <ThemeScheduleCard cfg={cfg} set={set} />
       <div className="card">
         <h2>Accent colour</h2>
@@ -1746,6 +1807,7 @@ function ThemeEditor({ themes, busy, onClose }: { themes: ThemeActions; busy: bo
   }
   const [s, setS] = useState(() => startFrom(BUILT_IN_THEMES.find((t) => themes.current.startsWith(`${t.id}:`))?.id ?? BUILT_IN_THEMES[0].id))
   const [name, setName] = useState('My theme')
+
   const canvas = useRef<HTMLCanvasElement>(null)
   const paint: ThemePaint = useMemo(() => ({
     base: [s.background, darken(s.background, 0.45)],
