@@ -37,6 +37,9 @@ object HomeEdit {
         else -> c.folders[container - 2 - c.rows.size].apps
     }
     private fun dock(c: HomeConfig, all: List<String>) = c.dockApps ?: (c.order + all).distinct().filter { it in all && it !in c.hidden && c.folders.none { g -> it in g.apps } }.take(c.dockSize)
+    /** Capture the rendered legacy Dock before membership edits; hidden/Other-app candidates are supplied by the UI. */
+    fun captureDock(c: HomeConfig, candidates: List<String>): HomeConfig =
+        if (c.dockApps != null) c else c.copy(dockApps = dock(c, candidates))
     fun source(c: HomeConfig, section: String): Int? = when {
         section == "dock" -> 0
         section == "grid" -> 1
@@ -90,6 +93,9 @@ object HomeEdit {
     }
 }
 
+private fun editingConfig(c: HomeConfig, all: List<TvApp>): HomeConfig = HomeEdit.captureDock(c,
+    all.filter { (!c.otherApps || it.banner) && !(c.lockOn && c.lockShow == "hide" && it.pkg in c.lockApps) }.map { it.pkg })
+
 @Composable
 fun EditorSheet(title: String, onClose: () -> Unit, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     val first = remember { FocusRequester() }
@@ -123,7 +129,7 @@ private fun rename(ctx: Context, title: String, value: String, done: (String) ->
 @Composable
 fun MoveAppEditor(app: TvApp, initialCfg: HomeConfig, all: List<TvApp>, source: String? = null, onClose: () -> Unit) {
     val ctx = LocalContext.current
-    val cfg = remember { initialCfg }
+    val cfg = remember { editingConfig(initialCfg, all) }
     val revision = remember { ConfigStore.revision }
     var destination by remember { mutableIntStateOf(0) }
     var position by remember { mutableIntStateOf(0) }
@@ -167,7 +173,13 @@ fun AppMenu(app: TvApp, source: String, cfg: HomeConfig, all: List<TvApp>, onMov
         item { EditorButton("Open App") { if (Lock.needsPin(ctx, app.pkg)) open(LockActivity.intent(ctx, app.pkg, app.launch)) else open(app.launch) } }
         item { EditorButton("Move App / Move to Folder", action = onMove) }
         if (source == "dock" || source.startsWith("row") || source.startsWith("folder:")) item {
-            EditorButton("Remove from this section") { ConfigStore.update(ctx, HomeEdit.remove(ConfigStore.config.value, app.pkg, source, all.map { it.pkg }).toJson()); onClose() }
+            EditorButton("Remove from this section") {
+                runCatching {
+                    val revision = ConfigStore.revision
+                    val next = HomeEdit.remove(editingConfig(ConfigStore.config.value, all), app.pkg, source, all.map { it.pkg })
+                    ConfigStore.update(ctx, next.toJson().put("_revision", revision))
+                }.onSuccess { onClose() }.onFailure { closeResult = it.message ?: "Shortcut was not removed" }
+            }
         }
         if (TaskAccess.available() && !TaskAccess.protected(ctx, app.pkg) && !closing) item { EditorButton("Close App") {
             AlertDialog.Builder(ctx).setTitle("Close ${app.label}?").setMessage("Playback and unsaved work may be interrupted.").setNegativeButton("Cancel", null).setPositiveButton("Close") { _, _ ->
@@ -227,7 +239,7 @@ fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
             item { EditorButton("Move earlier") { if (index > 0) { set(HomeEdit.reorderGroup(cfg, folder, index, -1)); selectedGroup = folder to index - 1 } } }
             item { EditorButton("Move later") { if (index < groups.lastIndex) { set(HomeEdit.reorderGroup(cfg, folder, index, 1)); selectedGroup = folder to index + 1 } } }
             item { EditorButton("Delete ${if (folder) "folder" else "row"} — keep all apps") {
-                AlertDialog.Builder(ctx).setTitle("Delete ${g.name}?").setMessage("Applications stay installed and remain available in All apps.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> set(HomeEdit.deleteGroup(cfg, folder, index, all.map { it.pkg })); selectedGroup = null }.show()
+                AlertDialog.Builder(ctx).setTitle("Delete ${g.name}?").setMessage("Applications stay installed and remain available in All apps.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> set(HomeEdit.deleteGroup(editingConfig(cfg, all), folder, index, all.map { it.pkg })); selectedGroup = null }.show()
             } }
             item { Text("Hold OK on an app to move it into or out of this group, or rearrange it.", color = Color.White) }
         }

@@ -79,6 +79,17 @@ class ReliabilityTest {
         assertThrows(IllegalArgumentException::class.java) { HomeEdit.renameGroup(cfg,false,0,"Two") }
         assertThrows(IllegalArgumentException::class.java) { HomeEdit.renameGroup(cfg,false,0,"") }
     }
+    @Test fun `legacy Dock capture preserves rendered membership when Other apps and locked apps are excluded`() {
+        val phone="org.phone.app"; val locked="org.locked.app"
+        val cfg=HomeConfig(order=listOf(phone,locked,a,b,c),dockSize=2,otherApps=true)
+        val captured=HomeEdit.captureDock(cfg,all)
+        assertEquals(listOf(a,b),captured.dockApps)
+        val moved=HomeEdit.move(captured,a,0,1,listOf(phone,locked)+all,0)
+        assertEquals(listOf(b,a),moved.dockApps)
+        assertEquals(cfg.folders,moved.folders); assertTrue(moved.otherApps)
+        val explicit=cfg.copy(dockApps=listOf(phone,a))
+        assertEquals(explicit,HomeEdit.captureDock(explicit,all))
+    }
     @Test fun `every editor entry has the same panel and selected-app protection policy`() {
         val cfg=fixture().copy(lockOn=true,lockSystem=true,lockApps=listOf(a))
         for (entry in EditorAccess.Entry.entries) {
