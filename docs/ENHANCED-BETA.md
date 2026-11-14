@@ -2,7 +2,7 @@
 
 CleanMyTV Enhanced is an unofficial community fork of [CleanMyTV](https://github.com/wingedpanther/cleanmytv), by wingedpanther. The upstream MIT licence and copyright notices remain in LICENSE. Enhanced is maintained in [JonahTweed/cleanmytv](https://github.com/JonahTweed/cleanmytv). It is not an official upstream release.
 
-Desktop candidate: **0.8.0-beta.1**. Launcher candidate: **1.7.4-enhanced.2**, Android version code **24**. This is a review candidate, not a declaration of physical-device compatibility. Do not distribute publicly until the device checklist has passed.
+Desktop candidate: **0.8.0-beta.2**. Launcher candidate: **1.7.4-enhanced.3**, Android version code **25**. This is a review candidate, not a declaration of physical-device compatibility. Do not distribute publicly until the device checklist has passed.
 
 ## Installation and upgrading
 
@@ -22,7 +22,7 @@ Create rows and folders, rename them, move them earlier/later, or delete them wi
 
 Hold OK on an app for Open, Move, section removal and applicable Android management actions. Move opens a destination/position editor: focus the destination control, use up/down to choose Dock, All apps, a row or a folder; left/right changes insertion position; OK commits; Back cancels without changing the saved layout. The editor also provides an app list for moving applications into empty groups. This is a D-pad destination/position editor, not a drag animation on the Home tiles.
 
-Moves relocate the app's custom placements; the app can still appear in the general All apps library. Dock holds at most eight apps; a custom row/folder holds at most sixty. Existing hidden/locked applications retain their lock policy. Native uninstall uses Android confirmation. App Info/Force stop opens the device's own settings where required.
+Moves relocate only the selected source shortcut; independent shortcuts in other groups remain. The general app chooser adds a destination shortcut without removing another placement; the app can still appear in the general All apps library. Dock holds at most eight apps; a custom row/folder holds at most sixty. Existing hidden/locked applications retain their lock policy. Native uninstall uses Android confirmation. App Info/Force stop opens the device's own settings where required.
 
 The desktop reads current configuration when connecting and periodically while idle. Revision checks reject stale desktop writes, and slider writes are serialised. If settings changed on the TV, refresh and repeat your edit rather than overwriting the newer layout.
 

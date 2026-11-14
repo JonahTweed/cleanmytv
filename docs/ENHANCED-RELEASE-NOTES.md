@@ -1,3 +1,9 @@
+# CleanMyTV Enhanced 0.8.0-beta.2 — reliability candidate
+
+See [reliability changes and device acceptance](ENHANCED-RELIABILITY.md). This candidate fixes independent shortcut preservation, consistent editing PIN entry, interrupted long-press handling and Home focus/scroll restoration. Launcher 1.7.4-enhanced.3 / code 25 uses the unchanged compatibility key. No public release or physical installation has been performed.
+
+The beta-1 notes below are historical and describe the previous build.
+
 # CleanMyTV Enhanced 0.8.0-beta.1 — review candidate
 
 Unofficial community fork of CleanMyTV by wingedpanther. MIT licence and upstream copyright retained.

@@ -1,3 +1,7 @@
+# Current reliability candidate
+
+The following beta-1 build record is historical. See ENHANCED-RELIABILITY.md and the reliability test/build logs in the updated review package for the current beta-2 validation and limitations.
+
 # Enhanced beta validation and review status
 
 Baseline: enhanced/development at abb05340a482fc13a991abef15024b854bffda36. Work is isolated on the local enhanced/community-beta branch; baseline history and main are unchanged.
