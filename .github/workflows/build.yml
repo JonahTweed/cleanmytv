@@ -4,7 +4,7 @@ name: Build
 # macOS and Windows installers; a v* tag then opens a draft release with them attached.
 on:
   push:
-    branches: [main]
+    branches: [main, enhanced/community-beta]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME already exists; leaving it alone"
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --draft --title "CleanMyTV $GITHUB_REF_NAME" --generate-notes --repo "$GITHUB_REPOSITORY"
+            gh release create "$GITHUB_REF_NAME" dist/* --draft --title "CleanMyTV Enhanced $GITHUB_REF_NAME" --generate-notes --repo "$GITHUB_REPOSITORY"
           fi
         env:
           GH_TOKEN: ${{ github.token }}

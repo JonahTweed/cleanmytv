@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   if (!existsSync(paths.keystore)) throw new Error(`missing ${paths.keystore}`)
   const dir = resolve('home')
   writeFileSync(join(dir, 'local.properties'), `sdk.dir=${sdk.replace(/\\/g, '\\\\').replace(/:/g, '\\:')}\n`)
-  const gradlew = join(dir, win ? 'gradlew.bat' : 'gradlew')
+  const gradlew = process.env.CMTV_GRADLE_BIN || join(dir, win ? 'gradlew.bat' : 'gradlew')
   if (!win) chmodSync(gradlew, 0o755)
   const r = await tools.run('build', gradlew, [
     'testDebugUnitTest', 'assembleRelease', '--no-daemon', '--console=plain',

@@ -37,7 +37,7 @@ export function javaHome(): string | null {
   return walk(root, 3)
 }
 
-export const sdkReady = (): boolean => existsSync(join(dirs.sdk, 'platforms', 'android-34')) && existsSync(join(dirs.sdk, 'build-tools', '34.0.0'))
+export const sdkReady = (): boolean => existsSync(join(dirs.sdk, 'platforms', 'android-37.0')) && existsSync(join(dirs.sdk, 'build-tools', '37.0.0'))
 /** Ready only when it is the pinned commit; a source folder from an older or unpinned download is fetched again. */
 export const adbPath = (): string => join(dirs.platformTools, exe('adb'))
 export const platformToolsReady = (): boolean => existsSync(adbPath())
@@ -145,11 +145,11 @@ async function getSdk(): Promise<void> {
     rmSync(tmp, { recursive: true, force: true })
     if (!win) chmodSync(sdkmanager, 0o755)
   }
-  progress({ tool: 'sdk', received: 0, total: 0, phase: 'install', message: 'Installing Android platform 34 and build tools' })
+  progress({ tool: 'sdk', received: 0, total: 0, phase: 'install', message: 'Installing Android platform 37 and build tools' })
   const env = { JAVA_HOME: home }
   const sdkRoot = `--sdk_root=${dirs.sdk}`
   await run('download', sdkmanager, ['--licenses', sdkRoot], { env, input: 'y\n'.repeat(20), quiet: true })
-  const r = await run('download', sdkmanager, ['--install', 'platforms;android-34', 'build-tools;34.0.0', sdkRoot], { env, input: 'y\n'.repeat(5) })
+  const r = await run('download', sdkmanager, ['--install', 'platforms;android-37.0', 'build-tools;37.0.0', sdkRoot], { env, input: 'y\n'.repeat(5) })
   if (r.code !== 0 || !sdkReady()) throw new Error('the Android SDK manager did not finish; see the log.')
 }
 

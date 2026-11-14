@@ -1,3 +1,13 @@
+# CleanMyTV Enhanced — unofficial community fork
+
+This fork adds remote Home editing, safe theme management and optional task controls to [CleanMyTV by wingedpanther](https://github.com/wingedpanther/cleanmytv). Upstream's MIT licence and copyright notices are retained. This is not an official upstream release.
+
+See [Enhanced beta installation, features, recovery and limitations](docs/ENHANCED-BETA.md) and [beta release notes](docs/ENHANCED-RELEASE-NOTES.md). Public release and physical-device installation await owner approval.
+
+The original project documentation follows; references to upstream releases there describe upstream, not the Enhanced update channel.
+
+---
+
 # CleanMyTV
 
 A free Mac and Windows app that cleans up your Android TV over Wi-Fi. It switches off the preinstalled

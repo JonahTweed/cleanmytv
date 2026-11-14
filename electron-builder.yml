@@ -1,5 +1,5 @@
 appId: io.github.wingedpanther.cleanmytv
-productName: CleanMyTV
+productName: CleanMyTV Enhanced
 directories:
   output: dist
   buildResources: build
@@ -36,12 +36,13 @@ mac:
   # lacks, and it only matters for notarization, which needs that certificate anyway.
   identity: '-'
   hardenedRuntime: false
+  artifactName: CleanMyTV-Enhanced-${version}-${arch}.${ext}
   target:
     - target: dmg
       arch: [arm64, x64]
   # The scan and ADB connection reach devices on the home network.
   extendInfo:
-    NSLocalNetworkUsageDescription: CleanMyTV connects to your Android TV on your home network.
+    NSLocalNetworkUsageDescription: CleanMyTV Enhanced connects to your Android TV on your home network.
 win:
   icon: build/icon.ico
   target:
@@ -49,7 +50,7 @@ win:
       arch: [x64]
 nsis:
   # Hyphens, not spaces: GitHub turns spaces in release asset names into dots.
-  artifactName: CleanMyTV-Setup-${version}.exe
+  artifactName: CleanMyTV-Enhanced-Setup-${version}.exe
   oneClick: false
   allowToChangeInstallationDirectory: true
 linux:

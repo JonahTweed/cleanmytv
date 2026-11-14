@@ -180,7 +180,7 @@ export default function App(): ReactNode {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark" aria-hidden />
-          <span className="brand-name">CleanMyTV</span>
+          <span className="brand-name">CleanMyTV Enhanced</span>
         </div>
         {currentTv?.thumb && (
           <button className="sidebar-tv" onClick={() => setStep('setup')} title="This TV. Open Setup to switch TVs." style={{ all: 'unset', cursor: 'pointer', display: 'block', marginBottom: 10 }}>
@@ -222,7 +222,7 @@ export default function App(): ReactNode {
             </svg>
             <span>wingedpanther/cleanmytv</span>
           </a>
-          <div className="gh-ver">CleanMyTV v{version} · MIT</div>
+          <div className="gh-ver">CleanMyTV Enhanced v{version} · MIT · Unofficial fork of wingedpanther/CleanMyTV</div>
           {update?.available && (
             <a className="update-link" href={update.url} target="_blank" rel="noreferrer">
               Version {update.latest} is out. Download it
