@@ -52,7 +52,10 @@ object HomeEdit {
             sections = (c.sections + when { to == 0 -> "dock"; to == 1 -> "grid"; to < 2 + c.rows.size -> "rows"; else -> "folders" }).distinct())
     }
     fun remove(c: HomeConfig, pkg: String, source: String, all: List<String>): HomeConfig = when {
-        source == "dock" -> move(c, pkg, 1, 0, all)
+        source == "dock" -> {
+            val remaining = dock(c, all).filter { it != pkg }
+            c.copy(order = remaining + (c.order + all).distinct().filter { it !in remaining }, dockSize = remaining.size)
+        }
         source.startsWith("row") -> c.copy(rows = c.rows.mapIndexed { i, g -> if (source == "row$i") g.copy(apps = g.apps - pkg) else g })
         source.startsWith("folder:") -> c.copy(folders = c.folders.map { if (it.name == source.removePrefix("folder:")) it.copy(apps = it.apps - pkg) else it })
         else -> c

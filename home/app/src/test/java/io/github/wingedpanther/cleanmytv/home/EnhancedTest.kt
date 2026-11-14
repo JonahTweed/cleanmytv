@@ -26,6 +26,15 @@ class EnhancedTest {
         assertEquals(emptyList<String>(), cfg.folders[0].apps)
         assertEquals(2, cfg.dockSize)
     }
+    @Test fun `removing from dock leaves all row placements and folders untouched`() {
+        val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app"), dockSize = 2,
+            rows = listOf(Group("TV", listOf("org.a.app"))), folders = listOf(Group("Tools", emptyList())))
+        val next = HomeEdit.remove(cfg, "org.a.app", "dock", cfg.order)
+        assertEquals(1, next.dockSize)
+        assertEquals(cfg.rows, next.rows)
+        assertEquals(cfg.folders, next.folders)
+        assertTrue(HomeEdit.apps(next, 1, cfg.order).contains("org.a.app"))
+    }
     @Test fun `moving within dock and row respects insertion position`() {
         val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app", "org.c.app"), dockSize = 2, rows = listOf(Group("TV", listOf("org.a.app", "org.c.app"))))
         assertEquals(listOf("org.b.app", "org.a.app"), HomeEdit.move(cfg, "org.a.app", 0, 1, cfg.order).order.take(2))
