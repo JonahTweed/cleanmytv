@@ -28,6 +28,6 @@ Background alarms are inexact and may be delayed during deep sleep; the current 
 
 macOS notarisation and Windows code signing are not configured. Platform installers require platform-specific runtime testing. GitHub refused branch creation with 403 for this connection, so the local review commits could not be pushed, a PR could not be opened, and hosted macOS/Windows workflow builds could not be started. No public release, main merge or physical TV change was performed.
 
-A Windows x64 NSIS installer was cross-built locally with the final signed APK bundled. It has not been run on Windows; macOS installers remain unbuilt. Automated validation passed 184 desktop tests, 13 Android unit tests, TypeScript checking, desktop compilation and signed APK assembly.
+A Windows x64 NSIS installer was cross-built locally with the final signed APK bundled. It has not been run on Windows; macOS installers remain unbuilt. Automated validation passed 184 desktop tests, 14 Android unit tests, TypeScript checking, desktop compilation and signed APK assembly.
 
 See ENHANCED-VALIDATION.md for exact commands/results and ENHANCED-BETA.md for installation, upgrade, rollback, troubleshooting and the physical-device checklist.
