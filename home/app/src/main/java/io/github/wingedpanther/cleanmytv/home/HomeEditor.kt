@@ -51,6 +51,11 @@ object HomeEdit {
         return c.copy(order = (newDock + rest).distinct(), dockSize = newDock.size, rows = rows, folders = folders, hidden = c.hidden - pkg,
             sections = (c.sections + when { to == 0 -> "dock"; to == 1 -> "grid"; to < 2 + c.rows.size -> "rows"; else -> "folders" }).distinct())
     }
+    fun deleteGroup(c: HomeConfig, folder: Boolean, index: Int, all: List<String>): HomeConfig {
+        val oldDock = dock(c, all)
+        val next = if (folder) c.copy(folders = c.folders.filterIndexed { i, _ -> i != index }) else c.copy(rows = c.rows.filterIndexed { i, _ -> i != index })
+        return next.copy(order = oldDock + (c.order + all).distinct().filter { it !in oldDock })
+    }
     fun remove(c: HomeConfig, pkg: String, source: String, all: List<String>): HomeConfig = when {
         source == "dock" -> {
             val remaining = dock(c, all).filter { it != pkg }
@@ -190,11 +195,11 @@ fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
         fun save(gs: List<Group>) { set(if (folder) cfg.copy(folders = gs) else cfg.copy(rows = gs)) }
         EditorSheet(g.name, { selectedGroup = null }) {
             item { EditorButton("Add or rearrange apps") { choosingApp = true } }
-            item { EditorButton("Rename") { rename(ctx, "Rename", g.name) { name -> save(groups.mapIndexed { i, old -> if (i == index) old.copy(name = name) else old }) } } }
+            item { EditorButton("Rename") { rename(ctx, "Rename", g.name) { name -> if (groups.withIndex().any { (i, old) -> i != index && old.name.equals(name, true) }) android.widget.Toast.makeText(ctx, "That name already exists", android.widget.Toast.LENGTH_LONG).show() else save(groups.mapIndexed { i, old -> if (i == index) old.copy(name = name) else old }) } } }
             item { EditorButton("Move earlier") { if (index > 0) { val gs = groups.toMutableList(); java.util.Collections.swap(gs, index, index - 1); save(gs); selectedGroup = folder to index - 1 } } }
             item { EditorButton("Move later") { if (index < groups.lastIndex) { val gs = groups.toMutableList(); java.util.Collections.swap(gs, index, index + 1); save(gs); selectedGroup = folder to index + 1 } } }
             item { EditorButton("Delete ${if (folder) "folder" else "row"} — keep all apps") {
-                AlertDialog.Builder(ctx).setTitle("Delete ${g.name}?").setMessage("Applications stay installed and remain available in All apps.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> save(groups.filterIndexed { i, _ -> i != index }); selectedGroup = null }.show()
+                AlertDialog.Builder(ctx).setTitle("Delete ${g.name}?").setMessage("Applications stay installed and remain available in All apps.").setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> set(HomeEdit.deleteGroup(cfg, folder, index, all.map { it.pkg })); selectedGroup = null }.show()
             } }
             item { Text("Hold OK on an app to move it into or out of this group, or rearrange it.", color = Color.White) }
         }
@@ -243,7 +248,7 @@ fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
         for (folder in listOf(false, true)) {
             val groups = if (folder) cfg.folders else cfg.rows
             val kind = if (folder) "folder" else "row"
-            if (groups.size < if (folder) 12 else 8) item { EditorButton("Create $kind") { rename(ctx, "New $kind", "") { name -> set(if (folder) cfg.copy(folders = groups + Group(name, emptyList())) else cfg.copy(rows = groups + Group(name, emptyList()))) } } }
+            if (groups.size < if (folder) 12 else 8) item { EditorButton("Create $kind") { rename(ctx, "New $kind", "") { name -> if (groups.any { it.name.equals(name, true) }) android.widget.Toast.makeText(ctx, "That name already exists", android.widget.Toast.LENGTH_LONG).show() else set(if (folder) cfg.copy(folders = groups + Group(name, emptyList())) else cfg.copy(rows = groups + Group(name, emptyList()))) } } }
             itemsIndexed(groups) { i, g -> EditorButton("Edit $kind: ${g.name}") { selectedGroup = folder to i } }
         }
     }

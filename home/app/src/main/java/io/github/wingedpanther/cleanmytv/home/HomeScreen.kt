@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -532,7 +533,7 @@ private fun Sections(home: Home, ui: Ui, modifier: Modifier, padding: PaddingVal
                     item("folders-title") { SectionTitle("Folders") }
                     item("folders") {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
-                            items(home.folders, key = { it.first }) { f -> FolderTile(f, ui, Modifier.width(148.dp * (cfg.tileScale / 100f))) }
+                            itemsIndexed(home.folders) { _, f -> FolderTile(f, ui, Modifier.width(148.dp * (cfg.tileScale / 100f))) }
                         }
                     }
                 }

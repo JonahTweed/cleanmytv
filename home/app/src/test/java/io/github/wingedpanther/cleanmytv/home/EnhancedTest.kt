@@ -46,6 +46,15 @@ class EnhancedTest {
         assertTrue(HomeEdit.apps(ungrouped, 1, cfg.order).contains("org.a.app"))
         assertEquals(cfg.hidden, ungrouped.hidden)
     }
+    @Test fun `deleting a folder preserves Dock positions while releasing its apps`() {
+        val cfg = HomeConfig(order = listOf("org.a.app", "org.b.app", "org.c.app"), dockSize = 2,
+            folders = listOf(Group("Tools", listOf("org.a.app"))))
+        val before = HomeEdit.apps(cfg, 0, cfg.order)
+        val next = HomeEdit.deleteGroup(cfg, true, 0, cfg.order)
+        assertEquals(before, HomeEdit.apps(next, 0, cfg.order))
+        assertTrue(HomeEdit.apps(next, 1, cfg.order).contains("org.a.app"))
+        assertEquals(2, next.dockSize)
+    }
     @Test fun `schedule boundaries handle overnight day intervals and DST`() {
         val spring = ZonedDateTime.parse("2026-03-29T02:31:00+01:00[Europe/London]")
         assertEquals("day", ScheduleClock.active(spring, "01:30", "19:00", "day", "night")!!.second)
