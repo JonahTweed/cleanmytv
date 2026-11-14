@@ -48,7 +48,7 @@ Theme installation stages a copy of the library and merges the changed entries. 
 
 Each installed theme has its own 0–100% tile-background opacity slider and Reset. Changes are stored by theme ID. The current-theme control and theme switching use the same effective value. Reset removes the personal override and restores the embedded default (100% for old packs without one). Logos, labels and focus treatments remain visible; an app's native opaque banner artwork cannot have its background removed.
 
-Portable theme exports carry the effective opacity and supported appearance, including spacing; they omit device-wide override maps, rows, folders and personal settings. Theme defaults remain in the installed pack. To change its spacing, apply it, adjust top spacing and update that theme from the current look. Existing packs missing spacing keep the current spacing rather than guessing settings from their names. For the owner's six packs, check the intended 18% original / 12% Glass spacing on-device and explicitly update any older packs that lack it.
+Portable theme exports carry the effective opacity and supported appearance, including spacing; they omit device-wide override maps, rows, folders and personal settings. Theme defaults remain in the installed pack. To change its spacing, apply it, adjust top spacing and update that theme from the current look. Existing packs missing spacing keep the current spacing rather than guessing settings from their names. Check each older pack's intended spacing on-device and explicitly update packs that lack it.
 
 On the TV, Edit Home Screen → Manage installed themes supports applying, saving the current look, renaming, updating and per-theme opacity/reset. It preserves all other themes.
 
@@ -76,7 +76,7 @@ Apple notarisation and Windows code signing are not configured. The desktop appl
 - Exercise long-press handling with different remotes; confirm/cancel moves across all containers; create empty groups; rename/reorder/delete; reconnect desktop and verify both-direction updates and stale-write rejection.
 - Test Shelf active/inactive media, 720p/1080p/4K scaling, tile sizes, other section orders, Back/Up focus, theme transitions and Split/Rail.
 - Save current look, upload/export/import, update/rename deliberately, interrupt transfers and test low storage. Verify the existing library's order and variants remain byte-for-byte intact.
-- Set distinct opacity/default/reset values for six themes, switch by remote/scheduler, reboot and export. Check opaque logos/focus and per-theme 18%/12% intended spacing.
+- Set distinct opacity/default/reset values for six themes, switch by remote/scheduler, reboot and export. Check opaque logos/focus and the intended spacing of every theme.
 - Test schedule edits, manual overrides, missed boundaries, reboot, deep sleep, timezone changes and DST.
 - Test Shizuku unavailable/denied/restarted, OEM task dump parsing, resumable switching, verified individual closing, Close All confirmation/results and protected-service exclusions. Stop testing if a protected component is affected.
 - Install and launch both macOS architectures and Windows x64; verify pairing, included APK version/certificate, upgrades, recovery and fork beta update checks.
