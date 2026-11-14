@@ -23,7 +23,8 @@ data class HomeConfig(
     val rows: List<Group> = emptyList(),
     val folders: List<Group> = emptyList(),
     val dockScale: Int = 100, // percent
-    val tileScale: Int = 100, // percent
+    val tileScale: Int = 100,
+    val tileGap: Int = 16, // percent
     // Remote buttons (KeyService)
     val buttonsOn: Boolean = false,
     val buttons: List<ButtonMap> = emptyList(),
@@ -46,6 +47,7 @@ data class HomeConfig(
     // Icons: "banner" is the app's own TV banner; the rest redraw every app's logo the same way
     val iconStyle: String = "banner", // banner, colour, mono, duo
     val tileShape: String = "wide", // wide, square, squircle, round; banner tiles are always wide
+    val themeOpacity: Map<String, Int> = emptyMap(),
     val tileOpacity: Int = 100, // percentage of existing icon-tile background opacity; logos remain opaque
     val intro: Boolean = true, // a new wallpaper comes in like a sunrise
     /** Which built-in theme picture the wallpaper is, as "<theme id>:<picture>", or "" for anything else. */
@@ -100,6 +102,7 @@ data class HomeConfig(
         .put("folders", groupsJson(folders))
         .put("dock_scale", dockScale)
         .put("tile_scale", tileScale)
+        .put("tile_gap", tileGap)
         .put("buttons_on", buttonsOn)
         .put("buttons", JSONArray(buttons.map { b -> JSONObject().put("code", b.code).put("action", b.action).apply { b.app?.let { put("app", it) } } }))
         .put("accent", hex(accent))
@@ -117,6 +120,7 @@ data class HomeConfig(
         .put("tilt", tilt)
         .put("icon_style", iconStyle)
         .put("tile_shape", tileShape)
+        .put("theme_opacity", JSONObject(themeOpacity))
         .put("tile_opacity", tileOpacity)
         .put("intro", intro)
         .put("wallpaper_from", wallpaperFrom)
@@ -220,6 +224,7 @@ data class HomeConfig(
                 folders = groups("folders", 12) ?: base.folders,
                 dockScale = int("dock_scale", base.dockScale, 60, 150),
                 tileScale = int("tile_scale", base.tileScale, 60, 150),
+                tileGap = int("tile_gap", base.tileGap, 4, 40),
                 accent = colour("accent", base.accent),
                 focus = choice("focus", base.focus, setOf("lift", "glow", "outline", "none")),
                 background = colour("background", base.background),
@@ -235,6 +240,9 @@ data class HomeConfig(
                 tilt = bool("tilt", base.tilt),
                 iconStyle = choice("icon_style", base.iconStyle, setOf("banner", "colour", "mono", "duo")),
                 tileShape = choice("tile_shape", base.tileShape, setOf("wide", "square", "squircle", "round")),
+                themeOpacity = o.optJSONObject("theme_opacity")?.let { m ->
+                    m.keys().asSequence().take(500).filter { THEME_ID.matches(it) && m.opt(it) is Number }.associateWith { m.optInt(it).coerceIn(0, 100) }
+                } ?: base.themeOpacity,
                 tileOpacity = int("tile_opacity", base.tileOpacity, 0, 100),
                 intro = bool("intro", base.intro),
                 wallpaperFrom = if (o.has("wallpaper_from")) o.optString("wallpaper_from").takeIf { it.isEmpty() || THEME_PICTURE.matches(it) } ?: base.wallpaperFrom else base.wallpaperFrom,
@@ -287,6 +295,8 @@ object ConfigStore {
     private val _wallpaperVersion = MutableStateFlow(0)
     val wallpaperVersion: StateFlow<Int> = _wallpaperVersion
     private var loaded = false
+    var revision: Long = 0
+        private set
 
     private fun file(ctx: Context) = File(ctx.filesDir, "config.json")
     /** False on a fresh install, before anything was set: CleanMyTV then puts its saved copy back. */
@@ -299,21 +309,38 @@ object ConfigStore {
         if (loaded) return
         loaded = true
         val f = file(ctx)
-        if (f.exists()) runCatching { _config.value = HomeConfig.fromJson(JSONObject(f.readText())) }
+        if (f.exists()) runCatching { val saved = JSONObject(String(android.util.AtomicFile(f).readFully(), Charsets.UTF_8)); _config.value = HomeConfig.fromJson(saved); revision = saved.optLong("_revision", 0) }
     }
 
     /** Merges a partial update, saves it atomically, and the UI follows through the flow. */
     @Synchronized
     fun update(ctx: Context, json: JSONObject): HomeConfig {
         load(ctx)
-        val next = HomeConfig.fromJson(json, _config.value)
-        val text = next.toJson().toString(2)
-        val tmp = File(ctx.filesDir, "config.json.tmp")
-        // On adopted storage a temp file left by an earlier install can refuse to be written (#59): then the
-        // settings go straight into config.json, without the swap.
-        val swapped = runCatching { tmp.writeText(text); tmp.renameTo(file(ctx)) }.getOrDefault(false)
-        if (!swapped) { tmp.delete(); file(ctx).writeText(text) }
+        if (json.has("_revision") && json.getLong("_revision") != revision) throw IllegalStateException("Settings changed on the TV. Refresh before editing again.")
+        var next = HomeConfig.fromJson(json, _config.value)
+        val id = next.wallpaperFrom.substringBefore(":")
+        if (json.has("tile_opacity") && !json.has("wallpaper_from") && id.isNotEmpty()) {
+            next = next.copy(themeOpacity = next.themeOpacity + (id to next.tileOpacity))
+        }
+        if (json.has("theme_opacity") && id.isNotEmpty()) {
+            val theme = ThemePack.list(ctx).firstOrNull { it.id == id }
+            next = next.copy(tileOpacity = next.themeOpacity[id] ?: theme?.look?.optInt("tile_opacity", 100) ?: 100)
+        }
+        val nextRevision = revision + 1
+        val text = next.toJson().put("_revision", nextRevision).toString(2)
+        val storage = android.util.AtomicFile(file(ctx))
+        var stream: java.io.FileOutputStream? = null
+        try {
+            stream = storage.startWrite()
+            stream.write(text.toByteArray(Charsets.UTF_8))
+            storage.finishWrite(stream)
+        } catch (e: Exception) {
+            storage.failWrite(stream)
+            throw e
+        }
+        revision = nextRevision
         _config.value = next
+        if (json.has("wallpaper_from") && !json.optBoolean("_scheduled", false)) ThemeSchedule.manual(ctx, next)
         return next
     }
 

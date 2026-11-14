@@ -69,6 +69,10 @@ class ConfigProvider : ContentProvider() {
             return out
         }
         when (method) {
+            "pack_save_current" -> {
+                val data = json(String(Base64.decode(arg ?: "", Base64.DEFAULT), Charsets.UTF_8))
+                ThemePack.saveCurrent(ctx, data.getString("id"), data.getString("name"))
+            }
             "get" -> ConfigStore.load(ctx)
             "set" -> {
                 val patch = json(arg)
@@ -94,7 +98,7 @@ class ConfigProvider : ContentProvider() {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(f.path, bounds)
                 if (bounds.outWidth <= 0) throw IllegalArgumentException("that is not a picture")
-                f.renameTo(ConfigStore.wallpaper(ctx))
+                check(f.renameTo(ConfigStore.wallpaper(ctx))) { "Cannot save wallpaper" }
                 ConfigStore.wallpaperChanged()
             }
             "wallpaper_remove" -> {
@@ -183,12 +187,14 @@ class ConfigProvider : ContentProvider() {
             else -> throw IllegalArgumentException("unknown method: $method")
         }
         val config = ConfigStore.config.value.toJson()
+            .put("_revision", ConfigStore.revision)
+            .put("pack_merge", true)
             .put("has_wallpaper", ConfigStore.wallpaper(ctx).exists())
             .put("configured", ConfigStore.configured(ctx))
             .put("quick_available", org.json.JSONArray(availableQuick(ctx)))
             .put("lock_pin_set", Lock.hasPin(ctx))
             .put("themes_on_tv", ThemePack.list(ctx).size)
-            .put("themes_available", org.json.JSONArray(ThemePack.list(ctx).map { t -> org.json.JSONObject().put("id", t.id).put("name", t.name) }))
+            .put("themes_available", org.json.JSONArray(ThemePack.list(ctx).map { t -> org.json.JSONObject().put("id", t.id).put("name", t.name).put("opacity_default", t.look.optInt("tile_opacity", 100)) }))
             .put("fire_on_tv", Fire.ready(ctx))
             .put("slides_on_tv", Slides.count(ctx))
             .put("can_change_settings", TvSettings.canWriteSecure(ctx))

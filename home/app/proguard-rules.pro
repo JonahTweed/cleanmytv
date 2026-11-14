@@ -1,0 +1,1 @@
+-keep class io.github.wingedpanther.cleanmytv.home.TaskUserService { *; }

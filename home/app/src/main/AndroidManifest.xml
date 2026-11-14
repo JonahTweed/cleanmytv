@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -19,6 +20,7 @@
 
     <!-- Android 11+ hides other apps unless we say which ones we look for. -->
     <queries>
+        <package android:name="moe.shizuku.privileged.api" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
@@ -30,7 +32,7 @@
     </queries>
 
     <application
-        android:label="CleanMyTV Home"
+        android:label="CleanMyTV Enhanced"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
@@ -115,5 +117,16 @@
             android:name=".ConfigProvider"
             android:authorities="io.github.wingedpanther.cleanmytv.home.config"
             android:exported="true" />
+        <provider android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku" android:multiprocess="false"
+            android:enabled="true" android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <receiver android:name=".ThemeScheduleReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

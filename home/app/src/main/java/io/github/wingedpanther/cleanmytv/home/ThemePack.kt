@@ -22,10 +22,11 @@ object ThemePack {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
-    private fun dir(ctx: Context) = File(ctx.filesDir, "themes")
+    private fun dir(ctx: Context) = ThemeFiles.live(ctx.filesDir)
     private fun upload(ctx: Context) = File(ctx.filesDir, "themes.upload")
     fun picture(ctx: Context, id: String, v: Int) = File(File(dir(ctx), id), "$v.jpg")
 
+    @Synchronized
     fun list(ctx: Context): List<PackTheme> {
         val order = runCatching { JSONArray(File(dir(ctx), "order.json").readText()) }.getOrNull() ?: return emptyList()
         return (0 until order.length()).mapNotNull { i ->
@@ -38,7 +39,8 @@ object ThemePack {
 
     // ---- upload, from ConfigProvider --------------------------------------------------------------
 
-    fun begin(ctx: Context) { upload(ctx).deleteRecursively(); upload(ctx).mkdirs() }
+    @Synchronized
+    fun begin(ctx: Context) { ThemeFiles.begin(ctx.filesDir) }
 
     fun meta(ctx: Context, o: JSONObject) {
         val id = o.optString("id").takeIf { ID.matches(it) } ?: throw IllegalArgumentException("bad theme id")
@@ -57,14 +59,46 @@ object ThemePack {
         return File(File(upload(ctx), id), "$v.jpg")
     }
 
+    @Synchronized
     fun end(ctx: Context, order: JSONArray) {
-        File(upload(ctx), "order.json").writeText(order.toString())
-        val old = File(ctx.filesDir, "themes.old")
-        old.deleteRecursively()
-        dir(ctx).renameTo(old)
-        upload(ctx).renameTo(dir(ctx))
-        old.deleteRecursively()
+        val previous = list(ctx).map { it.id }
+        val incoming = (0 until order.length()).map { order.getString(it) }
+        ThemeFiles.commit(ctx.filesDir, previous, incoming,
+            writeOrder = { stage, merged -> File(stage, "order.json").writeText(JSONArray(merged).toString()) }) { folder ->
+            val id = folder.name
+            require(File(folder, "meta.json").isFile && File(folder, "0.jpg").isFile) { "Incomplete theme: $id" }
+            JSONObject(File(folder, "meta.json").readText())
+            for (v in 0 until MAX_PICTURES) {
+                val pic = File(folder, "$v.jpg")
+                if (pic.exists()) {
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeFile(pic.path, bounds)
+                    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Invalid picture: $id:$v" }
+                }
+            }
+        }
         _version.value++
+    }
+
+    /** Save a current look entirely on-device. No wallpaper roundtrip or replacement library. */
+    @Synchronized
+    fun saveCurrent(ctx: Context, id: String, name: String) {
+        require(ID.matches(id) && name.isNotBlank()) { "Choose a valid theme name" }
+        val cfg = ConfigStore.config.value
+        require(list(ctx).none { it.id != id && it.name.equals(name, ignoreCase = true) }) { "That name already exists. Select that theme to update it." }
+        require(ConfigStore.wallpaper(ctx).isFile) { "Choose a wallpaper before saving a theme" }
+        begin(ctx)
+        meta(ctx, JSONObject().put("id", id).put("name", name).put("look", cfg.toJson()))
+        ConfigStore.wallpaper(ctx).copyTo(target(ctx, "$id:0"), overwrite = true)
+        end(ctx, JSONArray(listOf(id)))
+    }
+
+    fun rename(ctx: Context, id: String, name: String) {
+        val theme = list(ctx).firstOrNull { it.id == id } ?: error("Theme no longer installed")
+        require(name.isNotBlank() && list(ctx).none { it.id != id && it.name.equals(name, true) }) { "Choose a unique name" }
+        begin(ctx)
+        meta(ctx, JSONObject().put("id", id).put("name", name).put("look", theme.look))
+        end(ctx, JSONArray(listOf(id)))
     }
 
     fun clear(ctx: Context) { dir(ctx).deleteRecursively(); _version.value++ }
@@ -72,14 +106,14 @@ object ThemePack {
     // ---- use, from the carousel and the remote ----------------------------------------------------
 
     /** The theme's look and picture [v] become Home's, and the new wallpaper comes in with the intro. */
-    fun apply(ctx: Context, t: PackTheme, v: Int, withLook: Boolean = true) {
+    fun apply(ctx: Context, t: PackTheme, v: Int, withLook: Boolean = true, scheduled: Boolean = false) {
         val src = picture(ctx, t.id, v)
         if (!src.exists()) return
         val tmp = ConfigStore.wallpaperUpload(ctx)
         src.copyTo(tmp, overwrite = true)
-        tmp.renameTo(ConfigStore.wallpaper(ctx))
-        val change = if (withLook) JSONObject(t.look.toString()) else JSONObject()
-        ConfigStore.update(ctx, change.put("wallpaper_from", "${t.id}:$v"))
+        check(tmp.renameTo(ConfigStore.wallpaper(ctx))) { "Cannot apply wallpaper: previous wallpaper retained" }
+        val change = if (withLook) JSONObject(t.look.toString()).put("tile_opacity", ConfigStore.config.value.themeOpacity[t.id] ?: t.look.optInt("tile_opacity", 100)) else JSONObject()
+        ConfigStore.update(ctx, change.put("wallpaper_from", "${t.id}:$v").put("_scheduled", scheduled))
         ConfigStore.wallpaperChanged()
     }
 
@@ -91,6 +125,6 @@ object ThemePack {
     }
 
     private val LOOK_KEYS = listOf(
-        "accent", "background", "focus", "wallpaper_dim", "top_space", "viz_style", "viz_colour", "viz_peaks", "icon_style", "tile_shape", "tile_opacity",
+        "dock_scale", "tile_scale", "tile_gap", "show_names", "clock", "visualiser", "viz_bars", "viz_height", "viz_opacity", "viz_sensitivity", "accent", "background", "focus", "wallpaper_dim", "top_space", "viz_style", "viz_colour", "viz_peaks", "icon_style", "tile_shape", "tile_opacity",
     )
 }

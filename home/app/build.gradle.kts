@@ -12,15 +12,15 @@ android {
         // Android 9: the Mi Box S and nearly every TV still in use.
         minSdk = 28
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.7.4-enhanced.1"
+        versionCode = 24
+        versionName = "1.7.4-enhanced.2"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Local runs fall back to the debug key; scripts/build-home.ts signs with the app's own key
             // (android.injected.signing.*), so every copy of the desktop app installs over the others.
             signingConfig = signingConfigs.getByName("debug")
@@ -42,5 +42,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     // Drawn icons for the quick-settings bar; R8 keeps only the few used.
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+    testImplementation("org.json:json:20240303")
     testImplementation("junit:junit:4.13.2")
 }

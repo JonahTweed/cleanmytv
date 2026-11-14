@@ -98,6 +98,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -139,7 +141,6 @@ private fun scrim(alpha: Float) = GROUND.copy(alpha = alpha)
 // A 1080p TV is 960x540 dp; 5% of each edge stays clear because some TVs crop it.
 private val SAFE_X = 48.dp
 private val SAFE_Y = 27.dp
-private val GAP = 16.dp
 // Room on each side of a row so a focused tile's glow, shadow and zoom aren't clipped.
 private val BLEED = 22.dp
 
@@ -154,13 +155,13 @@ private class Home(all: List<TvApp>, val cfg: HomeConfig) {
     private val other = if (cfg.otherApps) shown.filter { !it.banner && it.pkg !in inFolders } else emptyList()
     val dock = shown.filter { it.pkg !in inFolders && it !in other }.take(cfg.dockSize)
     val grid = shown.filter { it.pkg !in inFolders && it !in dock && it !in other }
-    val rows = cfg.rows.map { g -> g.name to g.apps.mapNotNull { byPkg[it] }.filter { it.pkg !in cfg.hidden } }.filter { it.second.isNotEmpty() }
+    val rows = cfg.rows.map { g -> g.name to g.apps.mapNotNull { byPkg[it] }.filter { it.pkg !in cfg.hidden } }
     val folders = (cfg.folders.map { g -> g.name to g.apps.mapNotNull { byPkg[it] } } + listOf("Other apps" to other)).filter { it.second.isNotEmpty() }
     /** The tile that takes focus when Home opens, as "<section>:<package>" (an app can sit in two sections). */
     val first: String? = cfg.sections.firstNotNullOfOrNull { s ->
         when (s) {
             "dock" -> dock.firstOrNull()?.let { "dock:${it.pkg}" }
-            "rows" -> rows.firstOrNull()?.second?.firstOrNull()?.let { "row0:${it.pkg}" }
+            "rows" -> rows.mapIndexedNotNull { i, row -> row.second.firstOrNull()?.let { "row$i:${it.pkg}" } }.firstOrNull()
             "grid" -> grid.firstOrNull()?.let { "grid:${it.pkg}" }
             else -> null
         }
@@ -247,17 +248,21 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
         }
     }
     val byPkg = apps.associateBy { it.pkg }
-    val quick = cfg.quick.mapNotNull { id ->
+    val quick = (cfg.quick + "panel").distinct().mapNotNull { id ->
         HomeConfig.quickApp(id)?.let { p -> byPkg[p]?.let { appAction(it, quickIcons[p]) } } ?: all[id]
     }.filter { canOpen(ctx, it, inputs.isNotEmpty()) }
     var openFolder by remember { mutableStateOf<Pair<String, List<TvApp>>?>(null) }
     var showInputs by remember { mutableStateOf(false) }
     var showPanel by remember { mutableStateOf(false) }
+    var showEditor by remember { mutableStateOf(false) }
+    var showOpenApps by remember { mutableStateOf(false) }
+    var selectedApp by remember { mutableStateOf<Pair<String, TvApp>?>(null) }
+    var movingApp by remember { mutableStateOf<TvApp?>(null) }
     var showThemes by remember { mutableStateOf(false) }
     var panelPin by remember { mutableStateOf(false) }
     val openPanel = { if (Lock.needsPin(ctx, Lock.PANEL)) panelPin = true else showPanel = true }
-    LaunchedEffect(lastPress, cfg.idleMinutes, openFolder, showInputs, showPanel, showThemes) {
-        if (cfg.idleMinutes == 0 || openFolder != null || showInputs || showPanel || showThemes) return@LaunchedEffect
+    LaunchedEffect(lastPress, cfg.idleMinutes, openFolder, showInputs, showPanel, showThemes, showEditor, selectedApp, movingApp, showOpenApps) {
+        if (cfg.idleMinutes == 0 || openFolder != null || showInputs || showPanel || showThemes || showEditor || selectedApp != null || movingApp != null || showOpenApps) return@LaunchedEffect
         delay(cfg.idleMinutes * 60_000L)
         idle = true
     }
@@ -284,6 +289,7 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
     var focusColour by remember { mutableStateOf<Color?>(null) }
     val tint by animateColorAsState(focusColour ?: Color.Transparent, tween(600), label = "tint")
     val ui = Ui(cfg, accent, first, home.first, onFolder = { openFolder = it }, track = track, weather = weather,
+        onAppMenu = { section, app -> selectedApp = section to app }, onEdit = { showEditor = true },
         onFocusApp = { a -> focusColour = a.colour?.let { Color(it) } }, motion = motion)
 
     Box(
@@ -322,7 +328,11 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
 
     openFolder?.let { (name, list) -> FolderOverlay(name, list, ui) { openFolder = null } }
     if (showInputs) InputsOverlay(inputs, ui) { showInputs = false }
-    if (showPanel) SettingsPanel(accent) { showPanel = false }
+    if (showPanel) SettingsPanel(accent, onEdit = { showPanel = false; showEditor = true }, onOpenApps = { showPanel = false; showOpenApps = true }) { showPanel = false }
+    if (showEditor) HomeEditor(cfg, apps) { showEditor = false }
+    if (showOpenApps) OpenAppsScreen { showOpenApps = false }
+    selectedApp?.let { (section, app) -> AppMenu(app, section, cfg, apps, onMove = { selectedApp = null; openFolder = null; movingApp = app }) { selectedApp = null } }
+    movingApp?.let { app -> MoveAppEditor(app, cfg, apps) { movingApp = null } }
     if (showThemes) ThemeCarousel(accent) { showThemes = false }
     if (panelPin) Dialog(onDismissRequest = { panelPin = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         PinPad("Enter the PIN for Quick settings", Lock.PANEL, accent) { panelPin = false; showPanel = true }
@@ -388,6 +398,8 @@ private class Ui(
     val onFocusApp: (TvApp) -> Unit = {},
     /** False when the TV's animations are off: tiles still lift, without springs, tilt or sheen. */
     val motion: Boolean = true,
+    val onAppMenu: (String, TvApp) -> Unit = { _, _ -> },
+    val onEdit: () -> Unit = {},
 ) {
     /** Banners are always wide; the icon styles take the chosen shape. */
     val shape: String = if (cfg.iconStyle == "banner") "wide" else cfg.tileShape
@@ -484,24 +496,42 @@ private fun Sections(home: Home, ui: Ui, modifier: Modifier, padding: PaddingVal
     val cfg = ui.cfg
     BoxWithConstraints(modifier) {
         val inner = maxWidth - padding.calcHorizontal() - BLEED * 2
-        val gridW: Dp = (inner - GAP * (cfg.columns - 1)) / cfg.columns
+        val gridW: Dp = (inner - cfg.tileGap.dp * (cfg.columns - 1)) / cfg.columns
         // The default dock fits the screen; a bigger dock size scrolls sideways instead of shrinking past this.
         val n = home.dock.size.coerceIn(1, 5)
-        val dockW: Dp = minOf(dockWidth * (cfg.dockScale / 100f), (inner - GAP * (n - 1)) / n)
-        LazyColumn(Modifier.fillMaxSize().fadeTop(), contentPadding = padding) {
-            for (s in cfg.sections) when (s) {
+        val dockW: Dp = minOf(dockWidth * (cfg.dockScale / 100f), (inner - cfg.tileGap.dp * (n - 1)) / n)
+        val dockAt = cfg.sections.indexOf("dock")
+        val lowerAt = cfg.sections.indexOfFirst { it in listOf("rows", "folders", "grid") }
+        val paged = cfg.layout == "shelf" && home.dock.isNotEmpty() && dockAt >= 0 && (lowerAt < 0 || dockAt < lowerAt)
+            && cfg.sections.take(dockAt).all { it == "nowplaying" }
+        val density = LocalDensity.current
+        var openingHeight by remember { mutableStateOf(0.dp) }
+        val top = if (paged) minOf(padding.calculateTopPadding(), (maxHeight - openingHeight - 16.dp).coerceAtLeast(0.dp)) else padding.calculateTopPadding()
+        val inset = PaddingValues(start = padding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), end = padding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr), top = top, bottom = padding.calculateBottomPadding())
+        val viewport = maxHeight
+        LazyColumn(Modifier.fillMaxSize().fadeTop(), contentPadding = inset) {
+            if (paged) item("opening") {
+                Column(Modifier.height((viewport - top).coerceAtLeast(openingHeight))) {
+                    Column(Modifier.onSizeChanged { openingHeight = with(density) { it.height.toDp() } }) {
+                        if ("nowplaying" in cfg.sections.take(dockAt) && ui.track != null) NowPlayingCard(ui.track, ui)
+                        TileRow("dock", home.dock, ui, dockW, big = true)
+                    }
+                }
+            }
+            for (s in cfg.sections.filterNot { paged && (it == "dock" || (it == "nowplaying" && cfg.sections.indexOf(it) < dockAt)) }) when (s) {
                 "nowplaying" -> ui.track?.let { t -> item("nowplaying") { NowPlayingCard(t, ui) } }
                 "dock" -> if (home.dock.isNotEmpty()) item("dock") {
                     TileRow("dock", home.dock, ui, dockW, big = true)
                 }
                 "rows" -> home.rows.forEachIndexed { i, (name, list) ->
+                    if (list.isEmpty()) return@forEachIndexed
                     item("row$i-title") { SectionTitle(name) }
                     item("row$i") { TileRow("row$i", list, ui, 148.dp * (cfg.tileScale / 100f), big = false) }
                 }
                 "folders" -> if (showFolders && home.folders.isNotEmpty()) {
                     item("folders-title") { SectionTitle("Folders") }
                     item("folders") {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(GAP), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
                             items(home.folders, key = { it.first }) { f -> FolderTile(f, ui, Modifier.width(148.dp * (cfg.tileScale / 100f))) }
                         }
                     }
@@ -526,7 +556,7 @@ private fun LazyListScope.grid(home: Home, ui: Ui, w: Dp) {
     item("grid-title") { SectionTitle(label) }
     home.grid.chunked(ui.cfg.columns).forEachIndexed { i, row ->
         item("grid$i") {
-            Row(Modifier.padding(horizontal = BLEED, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(GAP)) {
+            Row(Modifier.padding(horizontal = BLEED, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp)) {
                 for (app in row) Tile("grid", app, ui, Modifier.width(w), big = false)
             }
         }
@@ -542,7 +572,7 @@ private fun SectionTitle(text: String) {
 @OptIn(ExperimentalFoundationApi::class)
 private fun TileRow(section: String, list: List<TvApp>, ui: Ui, w: Dp, big: Boolean) {
     val row = @Composable {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(GAP), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp), contentPadding = PaddingValues(horizontal = BLEED, vertical = 16.dp)) {
             val tw = if (ui.shape == "wide") w else w * 0.72f
             items(list, key = { it.pkg }) { app -> Tile(section, app, ui, Modifier.width(tw), big) }
         }
@@ -653,11 +683,12 @@ private fun Tile(section: String, app: TvApp, ui: Ui, size: Modifier, big: Boole
     val nameAlpha by animateFloatAsState(if (!ui.cfg.nameFocus || focused) 1f else 0f, tween(if (ui.motion) 200 else 0), label = "name")
     val wide = ui.shape == "wide"
     // In the grid and folders each slot keeps its width; a square tile sits in the middle of it.
-    val inSlot = section == "grid" || section == "folder"
+    val inSlot = section == "grid" || section.startsWith("folder:")
     val banner = ui.cfg.iconStyle == "banner"
     Column(size, horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally) {
         Surface(
             onClick = { launch(ctx, app) },
+            onLongClick = { ui.onAppMenu(section, app) },
             modifier = ui.focusFor(section, app).fillMaxWidth(if (!wide && inSlot) 0.72f else 1f).aspectRatio(if (wide) 16f / 9f else 1f)
                 .onFocusChanged { focused = it.isFocused; if (it.isFocused) ui.onFocusApp(app) }
                 .lift(ui, shape, focused),
@@ -792,6 +823,7 @@ private fun FolderTile(folder: Pair<String, List<TvApp>>, ui: Ui, size: Modifier
     Column(size) {
         Surface(
             onClick = { ui.onFolder(folder) },
+            onLongClick = { ui.onEdit() },
             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).onFocusChanged { focused = it.isFocused }.lift(ui, shape, focused),
             shape = ClickableSurfaceDefaults.shape(shape), scale = scale, glow = glow, border = border,
             colors = ClickableSurfaceDefaults.colors(containerColor = lerp(ground, ui.accent, 0.25f).copy(alpha = 0.9f), focusedContainerColor = lerp(ground, ui.accent, 0.4f))
@@ -971,10 +1003,10 @@ private fun FolderOverlay(name: String, list: List<TvApp>, ui: Ui, onClose: () -
         Box(Modifier.fillMaxSize().background(scrim(0.9f)), contentAlignment = Alignment.Center) {
             Column(Modifier.background(PANEL, RoundedCornerShape(16.dp)).padding(horizontal = 20.dp, vertical = 18.dp)) {
                 Text(name, color = TEXT, fontSize = 24.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = BLEED, bottom = 6.dp))
-                val inner = Ui(ui.cfg, ui.accent, focus, list.firstOrNull()?.let { "folder:${it.pkg}" }, ui.onFolder, motion = ui.motion)
+                val inner = Ui(ui.cfg, ui.accent, focus, list.firstOrNull()?.let { "folder:$name:${it.pkg}" }, ui.onFolder, motion = ui.motion, onAppMenu = ui.onAppMenu, onEdit = ui.onEdit)
                 list.chunked(5).forEach { row ->
-                    Row(Modifier.padding(horizontal = BLEED, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(GAP)) {
-                        for (app in row) Tile("folder", app, inner, Modifier.width(148.dp), big = false)
+                    Row(Modifier.padding(horizontal = BLEED, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(ui.cfg.tileGap.dp)) {
+                        for (app in row) Tile("folder:$name", app, inner, Modifier.width(148.dp), big = false)
                     }
                 }
             }

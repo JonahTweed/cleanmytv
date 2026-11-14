@@ -56,7 +56,7 @@ private val P_PANEL = Color(0xF51C2A1F)
  * Rows CleanMyTV couldn't get permission for show their value and open the TV's own screen.
  */
 @Composable
-fun SettingsPanel(accent: Color, onClose: () -> Unit) {
+fun SettingsPanel(accent: Color, onEdit: () -> Unit = {}, onOpenApps: () -> Unit = {}, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     var armOff by remember { mutableStateOf(false) }
@@ -81,6 +81,8 @@ fun SettingsPanel(accent: Color, onClose: () -> Unit) {
                 val adb = remember(tick) { TvSettings.debuggingOn(ctx) }
                 val fire = remember(tick) { Fire.ready(ctx) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item("edit-home") { PanelRow("Edit Home Screen", "Open", "Apps, rows, folders and appearance", accent, onClick = onEdit) }
+                    item("open-apps") { PanelRow("Open Apps", "Open", "Device task controls and compatibility", accent, onClick = onOpenApps) }
                     choices.forEachIndexed { n, c ->
                         item(c.label) {
                             fun step(d: Int) {
