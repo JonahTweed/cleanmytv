@@ -61,7 +61,9 @@ export async function connect(host: string): Promise<ConnStatus> {
   } catch (e) {
     const err = e as AdbError
     const m = /^([A-Za-z0-9.-]+)(?::(\d{1,5}))?$/.exec(host)
-    const hints = m ? diagnose({ code: err.code, errno: errnoOf(err.message ?? ''), host: m[1], port: m[2] ? Number(m[2]) : 5555 }, networkInterfaces(), process.platform) : []
+    let interfaces: ReturnType<typeof networkInterfaces> = {}
+    try { interfaces = networkInterfaces() } catch { /* Restricted computers can deny adapter enumeration. Keep the original connection error. */ }
+    const hints = m ? diagnose({ code: err.code, errno: errnoOf(err.message ?? ''), host: m[1], port: m[2] ? Number(m[2]) : 5555 }, interfaces, process.platform) : []
     if (hints.length) log('connect', 'info', `setup doctor: ${hints.join(' | ')}`)
     return setStatus({ state: 'error', host, error: [friendly(err), ...hints].join('\n\n'), needsPairing: err.code === 'tls' })
   }
