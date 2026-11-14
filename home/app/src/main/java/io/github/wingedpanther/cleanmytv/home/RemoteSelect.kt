@@ -17,11 +17,8 @@ import kotlinx.coroutines.launch
 class SelectPress {
     private var identity: String? = null
     private var held = false
-    private var interrupted = false
     fun down(key: String, fresh: Boolean = true): Boolean {
-        if (interrupted && !fresh) return false
-        interrupted = false
-        if (identity != null) return false
+        if (identity != null || !fresh) return false
         identity = key; held = false; return true
     }
     fun hold(key: String): Boolean {
@@ -30,9 +27,9 @@ class SelectPress {
     }
     fun up(key: String): Boolean {
         val click = identity == key && !held
-        cancel(); interrupted = false; return click
+        cancel(); return click
     }
-    fun cancel() { identity = null; held = false; interrupted = true }
+    fun cancel() { identity = null; held = false }
 }
 
 /** Compose-compatible remote handling; pointer long-click remains Surface's responsibility. */

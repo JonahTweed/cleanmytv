@@ -103,10 +103,10 @@ class ReliabilityTest {
     @Test fun `held OK cannot activate app on release and repeats fire once`() {
         val press=SelectPress(); assertTrue(press.down(a)); assertFalse(press.down(a))
         assertTrue(press.hold(a)); assertFalse(press.hold(a)); assertFalse(press.up(a))
-        assertTrue(press.down(a)); assertTrue(press.up(a)); assertFalse(press.up(a))
+        assertTrue(press.down(a)); assertTrue(press.up(a)); assertFalse(press.up(a)); assertFalse(press.down(a,false))
     }
     @Test fun `focus change pause cancellation and identity mismatch never activate another app`() {
-        val press=SelectPress(); press.down(a); assertFalse(press.hold(b)); press.cancel()
+        val press=SelectPress(); assertFalse(press.down(b, false)); press.down(a); assertFalse(press.hold(b)); press.cancel()
         assertFalse(press.down(a, false)); assertFalse(press.hold(a)); assertFalse(press.up(a)); assertFalse(press.up(b))
         press.down(b); assertTrue(press.up(b))
     }
