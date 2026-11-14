@@ -367,7 +367,7 @@ fun HomeScreen(visualiser: Visualiser, appsVersion: Int, open: androidx.compose.
     openFolder?.let { (name, list) -> FolderOverlay(name, list, ui) { openFolder = null } }
     if (showInputs) InputsOverlay(inputs, ui) { showInputs = false }
     if (showPanel) SettingsPanel(accent, onEdit = { protect(EditorAccess.Entry.EDITOR) { showPanel = false; showEditor = true } }, onOpenApps = { protect(EditorAccess.Entry.OPEN_APPS) { showPanel = false; showOpenApps = true } }) { showPanel = false }
-    if (showEditor) HomeEditor(cfg, apps) { showEditor = false }
+    if (showEditor) HomeEditor(cfg, apps, authorizeApp = { app, action -> protect(EditorAccess.Entry.APP_CHOOSER, app.pkg, action) }) { showEditor = false }
     if (showOpenApps) OpenAppsScreen { showOpenApps = false }
     selectedApp?.let { (section, app) -> AppMenu(app, section, cfg, apps, onMove = { protect(EditorAccess.Entry.APP_MENU, app.pkg) { selectedApp = null; openFolder = null; movingApp = section to app } }) { selectedApp = null } }
     movingApp?.let { (source, app) -> MoveAppEditor(app, cfg, apps, source) { movingApp = null } }

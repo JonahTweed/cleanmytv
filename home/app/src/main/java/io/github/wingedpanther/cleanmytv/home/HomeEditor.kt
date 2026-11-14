@@ -202,7 +202,7 @@ fun AppMenu(app: TvApp, source: String, cfg: HomeConfig, all: List<TvApp>, onMov
 }
 
 @Composable
-fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
+fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, authorizeApp: (TvApp, () -> Unit) -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var choosingApp by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf<TvApp?>(null) }
@@ -211,7 +211,7 @@ fun HomeEditor(cfg: HomeConfig, all: List<TvApp>, onClose: () -> Unit) {
     moving?.let { app -> MoveAppEditor(app, cfg, all) { moving = null }; return }
     if (choosingApp) {
         EditorSheet("Choose an app to move", { choosingApp = false }) {
-            itemsIndexed(all) { _, app -> EditorButton(app.label) { moving = app } }
+            itemsIndexed(all) { _, app -> EditorButton(app.label) { authorizeApp(app) { moving = app } } }
         }
         return
     }

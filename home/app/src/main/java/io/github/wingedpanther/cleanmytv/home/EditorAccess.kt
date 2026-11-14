@@ -2,7 +2,7 @@ package io.github.wingedpanther.cleanmytv.home
 
 /** Every remote editing entry inherits the system-settings policy and the selected app's lock. */
 object EditorAccess {
-    enum class Entry { APP_MENU, FOLDER, EDITOR, PANEL, OPEN_APPS }
+    enum class Entry { APP_MENU, APP_CHOOSER, FOLDER, EDITOR, PANEL, OPEN_APPS }
     fun targets(cfg: HomeConfig, hasPin: Boolean, entry: Entry, app: String? = null): List<String> {
         if (!cfg.lockOn || !hasPin) return emptyList()
         val targets = mutableListOf<String>()

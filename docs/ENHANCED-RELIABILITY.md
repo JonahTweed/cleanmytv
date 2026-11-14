@@ -34,7 +34,7 @@ Tile focus is registered by section/package, with folder-origin fallback. Dialog
 
 The full desktop suite includes explicit Dock membership validation, legacy/null/empty states, independent folder membership, size limits and exclusion from portable themes.
 
-Android tests cover Dock reordering with duplicate row/folder shortcuts; source-specific row and folder moves; adding independent shortcuts; per-row removal; row/folder deletion; whole-row ordering, rename and boundaries; hidden and stale-package cases; legacy/explicit configuration round-trip; all five editor entry policies with Settings/app locks enabled and disabled; short press, repeated hold, held release, cancellation and selection-identity mismatch. Existing theme storage/recovery, opacity, DST, task-parser and input tests remain in the complete run.
+Android tests cover Dock reordering with duplicate row/folder shortcuts; source-specific row and folder moves; adding independent shortcuts; per-row removal; row/folder deletion; whole-row ordering, rename and boundaries; hidden and stale-package cases; legacy/explicit configuration round-trip; all six editor entry policies, including the general app chooser, with Settings/app locks enabled and disabled; short press, repeated hold, held release, cancellation and selection-identity mismatch. Existing theme storage/recovery, opacity, DST, task-parser and input tests remain in the complete run.
 
 Unit tests exercise the shared policy and input state machine. They do not simulate a physical remote, compose focus tree, native settings activity or an actual PIN entry session.
 
